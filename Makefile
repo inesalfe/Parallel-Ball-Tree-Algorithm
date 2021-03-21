@@ -1,4 +1,5 @@
-CFLAGS=-O3 -Wall 
+#ola
+CFLAGS=-O3 -Wall
 CPP = /usr/local/opt/llvm/bin/clang
 CPPFLAGS = -I/usr/local/opt/llvm/include -fopenmp
 LDFLAGS = -L/usr/local/opt/llvm/lib
