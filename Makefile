@@ -1,4 +1,3 @@
-# CC=gcc
 CFLAGS=-O3 -Wall 
 CPP = /usr/local/opt/llvm/bin/clang
 CPPFLAGS = -I/usr/local/opt/llvm/include -fopenmp
