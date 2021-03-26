@@ -201,11 +201,8 @@ long partition(int l, int h, int pivotIndex)
 //      }
 // }
 
-// long *M;
-
 int cmp(const void *a, const void *b)
 {
-	// printf("%ld %ld\n", *(long *)a, *(long *)b);
 	return proj_scalar[*(long *)a] > proj_scalar[*(long *)b] ? 1 : -1;
 }
 
@@ -216,16 +213,28 @@ long select_k(int left, int right, int k)
 	if (right - left == 1)
 		return idx[left];
 
+	printf("l: %d\n", left);
+	printf("r: %d\n", right);
+	printf("k: %d\n", k);
+
 	long pivotIndex = pivot(left, right);
+
+	for (int i = left; i < right; ++i)
+		printf("%ld ", idx[i]);
+	printf("\n");
+
+	printf("pivot: %ld\n", pivotIndex);
 
 	pivotIndex = partition(left, right, pivotIndex);
 
-	// for (int i = left; i < right; ++i)
-	//      printf("%f ", proj_scalar[idx[i]]);
-	// printf("\n");
+	for (int i = left; i < right; ++i)
+		printf("%ld ", idx[i]);
+	printf("\n");
+
+	printf("pivot: %ld\n", pivotIndex);
 
 	if (k == pivotIndex - left)
-		return idx[k];
+		return idx[k+left];
 	else if (k < pivotIndex - left)
 		return select_k(left, pivotIndex, k);
 	else
@@ -234,18 +243,11 @@ long select_k(int left, int right, int k)
 
 long pivot(long left, long right)
 {
-	// for (int i = left; i < right; ++i)
-	//      printf("%f ", proj_scalar[idx[i]]);
-	// printf("\n");
 	// for 5 or less elements just get median
 	if (right - left <= 5) {
 		qsort(idx + left, right - left, sizeof(long), &cmp);
-		// for (int i = left; i < right; ++i)
-		//      printf("%f ", proj_scalar[idx[i]]);
-		// printf("\n");
 		return left + (right - left) / 2;
 	}
-	// exit(0);
 	// otherwise move the medians of five-element subgroups to the first n/5 positions
 	for (int i = left; i < right; i += 5) {
 		// get the median position of the i'th five-element subgroup
@@ -261,12 +263,14 @@ long pivot(long left, long right)
 	return select_k(left, left + (right - left) / 5 + 1, mid);
 }
 
-
 void get_medianv2(long l, long h, long *median_1, long *median_2)
 {
-	// select(int left, int right, int k)
+	// Ricardo adicionei um if extra. Eu sei q é mais um if mas sem ele vão haver no mínimo 4 chamadas de funções desnecessariamente quando a mediana já está pré-determinada.
 	if ((h - l) % 2 == 1) {
 		*median_1 = select_k(l, h, (h - l - 1) / 2);
+	} else if (h - l == 2) {
+		*median_1 = idx[l];
+		*median_2 = idx[l+1];
 	} else {
 		*median_1 = select_k(l, h, (h - l) / 2 - 1);
 		*median_2 = select_k(l + (h - l) / 2, h, 0);
@@ -311,7 +315,17 @@ long ballAlg(long l, long r)
 
 	// 4. Compute the center, defined as the median point over all projections
 	long m1, m2 = -1;
+
+	for (int i = l; i < r; ++i)
+		printf("%f ", proj_scalar[idx[i]]);
+	printf("\n");
+
+	for (int i = l; i < r; ++i)
+		printf("%ld ", idx[i]);
+	printf("\n");
+
 	get_medianv2(l, r, &m1, &m2);
+
 #ifdef DEBUG
 	printf("Median index 1: %d, Median index 2: %d\nMedian point 1: ", m1, m2);
 	print_point(pt_array[m1], n_dims);
@@ -338,24 +352,15 @@ long ballAlg(long l, long r)
 	}
 
 	double max_r = 0, rad;
-	print_point(tree[id].center, n_dims, stdout);
-	for (int i = l; i < r; ++i)
-		printf("%f ", proj_scalar[idx[i]]);
-	printf("\n");
-
-	printf("l: %ld, r: %ld\n", l, r);
-
 	for (int i = l; i < r; ++i) {
-		printf("%ld ", idx[i]);
 		rad = dist(tree[id].center, pt_array[idx[i]]);
 		if (rad > max_r)
 			max_r = rad;
 	}
-	printf("\n");
 	max_r = sqrt(max_r);
 
 	long L, R;
-	// printf("Chegaste aqui?\n");
+
 	L = ballAlg(l, l + (r - l) / 2);
 	R = ballAlg(l + (r - l) / 2, r);
 
@@ -389,10 +394,10 @@ int main(int argc, char **argv)
 	// 1. Get input sample points
 	pt_array = get_points(argc, argv, &n_dims, &np);
 
-// #ifdef DEBUG
+#ifdef DEBUG
 	for (int i = 0; i < np; ++i)
 		print_point(pt_array[i], n_dims, stdout);
-// #endif
+#endif
 
 	idx = (long *)malloc(sizeof(long) * np);
 	for (int i = 0; i < np; ++i)
@@ -400,7 +405,6 @@ int main(int argc, char **argv)
 
 	proj_scalar = (double *)malloc(np * sizeof(double));
 	center1 = (double *)malloc(n_dims * sizeof(double));
-	// M = (long *)malloc(np * sizeof(long));
 
 	tree = (node *)malloc((2 * np - 1) * sizeof(node));
 	for (int i = 0; i < (2 * np - 1); ++i)
@@ -411,7 +415,7 @@ int main(int argc, char **argv)
 	exec_time += omp_get_wtime();
 	fprintf(stderr, "%.3lf\n", exec_time);
 
-	print_tree(tree);
+	// print_tree(tree);
 
 	free(center1);
 
@@ -419,10 +423,12 @@ int main(int argc, char **argv)
 		free(tree[i].center);
 	free(tree);
 
-	// free(M);
 	free(proj_scalar);
 	free(idx);
 	free(pt_array[0]);
 	free(pt_array);
-	exit(0);
+
+	// Ricardo em vez de return 0 antes estava exit(0). Mas é return , certo?
+	return 0;
+
 }
