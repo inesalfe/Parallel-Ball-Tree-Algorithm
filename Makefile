@@ -1,5 +1,5 @@
 win:
-  make -f makefile.win
+	make -f Makefile.win
 
 nix:
-  make -f makefile.nix
+	make -f Makefile.nix
