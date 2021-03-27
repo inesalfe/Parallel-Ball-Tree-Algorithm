@@ -168,6 +168,11 @@ int is_seq(int i, int j)
 
 long partition(int l, int h, int pivotIndex)
 {
+
+	// printf("l: %d\n", l);
+	// printf("r: %d\n", h);
+	// printf("p: %d\n", pivotIndex);
+
 	swap(&idx[pivotIndex], &idx[l]);
 
 	int i = l;
@@ -191,6 +196,34 @@ long partition(int l, int h, int pivotIndex)
 	return j;
 }
 
+// long partition(long left, long right, long pivotIndex, long n) {
+//     swap(&idx[pivotIndex], &idx[right-1]);  // Move pivot to end
+//     long storeIndex = left;
+//     // Move all elements smaller than the pivot to the left of the pivot
+//     for (int i = left; i < right; i++)
+//         if (is_seq(idx[i], idx[pivotIndex])) {
+//             swap(&idx[storeIndex], &idx[i]);
+//             storeIndex += 1;
+//         }
+
+//     // Move all elements equal to the pivot right after
+//     // the smaller elements
+//     long storeIndexEq = storeIndex;
+//     for (int i = storeIndex; i < right; i++)
+//         if (idx[i] == idx[pivotIndex]) {
+//             swap(&idx[storeIndexEq], &idx[i]);
+//             storeIndexEq += 1;
+//         }
+
+//     swap(&idx[right], &idx[storeIndexEq]);  // Move pivot to its final place
+//     // Return location of pivot considering the desired location n
+//     if (n < storeIndex)
+//         return storeIndex;  // n is in the group of smaller elements
+//     if (n <= storeIndexEq)
+//         return n;  // n is in the group equal to pivot
+//     return storeIndexEq; // n is in the group of larger elements
+// }
+
 // void get_median(int l, int h, int *median_1, int *median_2)
 // {
 //      if ((h - l) % 2 == 1) {
@@ -211,30 +244,32 @@ long pivot(long left, long right);
 long select_k(int left, int right, int k)
 {
 	if (right - left == 1)
-		return idx[left];
+		return left;
 
-	printf("l: %d\n", left);
-	printf("r: %d\n", right);
-	printf("k: %d\n", k);
+	// printf("l: %d\n", left);
+	// printf("r: %d\n", right);
+	// printf("k: %d\n", k);
 
 	long pivotIndex = pivot(left, right);
 
-	for (int i = left; i < right; ++i)
-		printf("%ld ", idx[i]);
-	printf("\n");
+	// printf("Before Partition: ");
+	// for (int i = left; i < right; ++i)
+	// 	printf("%ld ", idx[i]);
+	// printf("\n");
 
-	printf("pivot: %ld\n", pivotIndex);
+	// printf("pivot: %ld\n", pivotIndex);
 
 	pivotIndex = partition(left, right, pivotIndex);
 
-	for (int i = left; i < right; ++i)
-		printf("%ld ", idx[i]);
-	printf("\n");
+	// printf("After Partition: ");
+	// for (int i = left; i < right; ++i)
+	// 	printf("%ld ", idx[i]);
+	// printf("\n");
 
-	printf("pivot: %ld\n", pivotIndex);
+	// printf("pivot: %ld\n", pivotIndex);
 
 	if (k == pivotIndex - left)
-		return idx[k+left];
+		return k+left;
 	else if (k < pivotIndex - left)
 		return select_k(left, pivotIndex, k);
 	else
@@ -255,9 +290,12 @@ long pivot(long left, long right)
 		if (subRight > right)
 			subRight = right;
 		qsort(idx + i, subRight - i, sizeof(long), cmp);
-		long median5 = idx[i + (subRight - i) / 2];
-		swap(&median5, &idx[left + (i - left) / 5]);
+		long median5 = i + (subRight - i) / 2;
+		swap(&idx[median5], &idx[left + (i - left) / 5]);
 	}
+	// for (int i = left; i < right; ++i)
+	// printf("%ld ", idx[i]);
+	// printf("\n");
 	// compute the median of the n/5 medians-of-five
 	int mid = /*left + */ (right - left) / 10;// + 1;
 	return select_k(left, left + (right - left) / 5 + 1, mid);
@@ -267,13 +305,13 @@ void get_medianv2(long l, long h, long *median_1, long *median_2)
 {
 	// Ricardo adicionei um if extra. Eu sei q é mais um if mas sem ele vão haver no mínimo 4 chamadas de funções desnecessariamente quando a mediana já está pré-determinada.
 	if ((h - l) % 2 == 1) {
-		*median_1 = select_k(l, h, (h - l - 1) / 2);
+		*median_1 = idx[select_k(l, h, (h - l - 1) / 2)];
 	} else if (h - l == 2) {
 		*median_1 = idx[l];
 		*median_2 = idx[l+1];
 	} else {
-		*median_1 = select_k(l, h, (h - l) / 2 - 1);
-		*median_2 = select_k(l + (h - l) / 2, h, 0);
+		*median_1 = idx[select_k(l, h, (h - l) / 2 - 1)];
+		*median_2 = idx[select_k(l + (h - l) / 2, h, 0)];
 	}
 }
 
@@ -284,7 +322,6 @@ long n_nodes = 0; // Total number of tree nodes (in the end will equal 2 * np - 
 
 long ballAlg(long l, long r)
 {
-	printf("\n");
 	++n_nodes;
 	long id = n_nodes - 1;
 
@@ -316,13 +353,13 @@ long ballAlg(long l, long r)
 	// 4. Compute the center, defined as the median point over all projections
 	long m1, m2 = -1;
 
-	for (int i = l; i < r; ++i)
-		printf("%f ", proj_scalar[idx[i]]);
-	printf("\n");
+	// for (int i = l; i < r; ++i)
+	// 	printf("%f ", proj_scalar[idx[i]]);
+	// printf("\n");
 
-	for (int i = l; i < r; ++i)
-		printf("%ld ", idx[i]);
-	printf("\n");
+	// for (int i = l; i < r; ++i)
+	// 	printf("%ld ", idx[i]);
+	// printf("\n");
 
 	get_medianv2(l, r, &m1, &m2);
 
@@ -340,12 +377,12 @@ long ballAlg(long l, long r)
 
 	if ((r - l) % 2) {
 		orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
-		printf("%f\n", proj_scalar[m1]);
+		// printf("%f\n", proj_scalar[m1]);
 	} else {
 		orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
 		orth_projv2(pt_array[a], pt_array[b], m2, center1);
-		printf("%f ", proj_scalar[m1]);
-		printf("%f\n", proj_scalar[m2]);
+		// printf("%f ", proj_scalar[m1]);
+		// printf("%f\n", proj_scalar[m2]);
 
 		for (int i = 0; i < n_dims; ++i)
 			tree[id].center[i] = .5 * (tree[id].center[i] + center1[i]);
@@ -415,7 +452,7 @@ int main(int argc, char **argv)
 	exec_time += omp_get_wtime();
 	fprintf(stderr, "%.3lf\n", exec_time);
 
-	// print_tree(tree);
+	print_tree(tree);
 
 	free(center1);
 
