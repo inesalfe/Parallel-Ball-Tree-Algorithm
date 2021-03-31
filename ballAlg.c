@@ -90,18 +90,14 @@ double orth_projv1(double *a, double *b, double *p) {
 }
 
 void orth_projv2(double *a, double *b, long idx_p, double *ab_proj) {
-    double abnorm = 0.0, aux, u = proj_scalar[idx_p]; //, scale = 0.0, ;
+    double abnorm = 0.0, aux, u = proj_scalar[idx_p];
     for (int i = 0; i < n_dims; ++i) {
         aux = (b[i] - a[i]);
         ab_proj[i] = u * aux;
-        // scale += ((pt_array[idx_p][i] - a[i]) * aux);
         abnorm += aux * aux;
     }
-    // double u = proj_scalar[idx_p] / abnorm;
-    // ab_proj[0] = proj_scalar[idx_p];
-    // double u = (proj_scalar[idx_p] - a[0]) / (b[0] - a[0]);
+
     for (int i = 0; i < n_dims; ++i)
-        // ab_proj[i] = u * (b[i] - a[i]) + a[i];
         ab_proj[i] = ab_proj[i] / abnorm + a[i];
 }
 
@@ -246,12 +242,8 @@ long ballAlg(long l, long r) {
 #endif
 
     if ((r - l) % 2) {
-        // m1 = idx[l + (r - l) / 2];
         orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
     } else {
-        // m1 = idx[l + (r - l) / 2 - 1];
-        // m2 = idx[l + (r - l) / 2];
-
         orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
         orth_projv2(pt_array[a], pt_array[b], m2, center1);
         for (int i = 0; i < n_dims; ++i)
@@ -280,13 +272,11 @@ long ballAlg(long l, long r) {
 
 void print_tree(node *tree) {
     FILE *fd = fopen("pts.txt", "w");
-    // fprintf(fd, "\033[38;5;198m%d %ld\n", n_dims, 2 * np - 1);
     fprintf(fd, "%d %ld\n", n_dims, 2 * np - 1);
     for (long i = 0; i < 2 * np - 1; ++i) {
         fprintf(fd, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
         print_point(tree[i].center, n_dims, fd);
     }
-    // fprintf(fd, "\n\033[0m");
     fclose(fd);
 }
 
@@ -313,7 +303,6 @@ int main(int argc, char **argv) {
 
     proj_scalar = (double *)malloc(np * sizeof(double));
     center1 = (double *)malloc(n_dims * sizeof(double));
-    // M = (long *)malloc(np * sizeof(long));
 
     tree = (node *)malloc((2 * np - 1) * sizeof(node));
     for (int i = 0; i < (2 * np - 1); ++i)
@@ -332,10 +321,10 @@ int main(int argc, char **argv) {
         free(tree[i].center);
     free(tree);
 
-    // free(M);
     free(proj_scalar);
     free(idx);
     free(pt_array[0]);
     free(pt_array);
-    exit(0);
+
+    return 0;
 }
