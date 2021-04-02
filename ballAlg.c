@@ -116,14 +116,17 @@ double orth_projv1(double *a, double *b, double *p) {
 * vector into ab_proj. Uses the value already computed by the previous function (orth_projv1). */
 void orth_projv2(double *a, double *b, long idx_p, double *ab_proj) {
     double abnorm = 0.0, aux, u = proj_scalar[idx_p];
-    for (int i = 0; i < n_dims; ++i) {
-        aux = (b[i] - a[i]);
-        ab_proj[i] = u * aux;
-        abnorm += aux * aux;
-    }
+    #pragma omp parallel for private(aux) reduction(+:abnorm)
+        for (int i = 0; i < n_dims; ++i) {
+            aux = (b[i] - a[i]);
+            ab_proj[i] = u * aux;
+            abnorm += aux * aux;
+        }
 
-    for (int i = 0; i < n_dims; ++i)
-        ab_proj[i] = ab_proj[i] / abnorm + a[i];
+// Como é que eu aproveito as threads criadas em cima para o for de baixo?
+    #pragma omp parallel for
+        for (int i = 0; i < n_dims; ++i)
+            ab_proj[i] = ab_proj[i] / abnorm + a[i];
 }
 
 /* Comparison function: compares the orthogonal projections at indexes i and j. */
@@ -253,8 +256,10 @@ long ballAlg(long l, long r) {
 #endif
 
     // 3. Perform the orthogonal projection of all points onto line ab
-    for (int i = l; i < r; ++i)
-        proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
+
+    #pragma omp parallel for
+        for (int i = l; i < r; ++i)
+            proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
 
     // 4. Compute the center, defined as the median point over all projections
     int m1, m2 = -1;
