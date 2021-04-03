@@ -35,6 +35,8 @@ double *proj_scalar;
 */
 long *idx;
 
+#pragma omp threadprivate(n_dims, np, pt_array, tree, proj_scalar)
+
 /* Function to print a point to a given file */
 void print_point(double *pt, int dim, FILE *fd) {
     for (int i = 0; i < dim; ++i)
@@ -116,7 +118,7 @@ double orth_projv1(double *a, double *b, double *p) {
 * vector into ab_proj. Uses the value already computed by the previous function (orth_projv1). */
 void orth_projv2(double *a, double *b, long idx_p, double *ab_proj) {
     double abnorm = 0.0, aux, u = proj_scalar[idx_p];
-    #pragma omp parallel for private(aux) reduction(+:abnorm)
+    // #pragma omp parallel for private(aux) reduction(+:abnorm)
         for (int i = 0; i < n_dims; ++i) {
             aux = (b[i] - a[i]);
             ab_proj[i] = u * aux;
@@ -124,7 +126,7 @@ void orth_projv2(double *a, double *b, long idx_p, double *ab_proj) {
         }
 
 // Como é que eu aproveito as threads criadas em cima para o for de baixo?
-    #pragma omp parallel for
+    // #pragma omp parallel for
         for (int i = 0; i < n_dims; ++i)
             ab_proj[i] = ab_proj[i] / abnorm + a[i];
 }
@@ -228,6 +230,8 @@ double *abproj;
 
 long n_nodes = 0; // Total number of tree nodes (in the end will equal 2 * np - 1)
 
+#pragma omp threadprivate(center1, abproj, n_nodes)
+
 /* Actual algorithm to compute the tree. */
 long ballAlg(long l, long r) {
 
@@ -257,7 +261,7 @@ long ballAlg(long l, long r) {
 
     // 3. Perform the orthogonal projection of all points onto line ab
 
-    #pragma omp parallel for
+    // #pragma omp parallel for
         for (int i = l; i < r; ++i)
             proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
 
@@ -326,46 +330,69 @@ int main(int argc, char **argv) {
     double exec_time;
     exec_time = -omp_get_wtime();
 
-    // 1. Get input sample points
-    pt_array = get_points(argc, argv, &n_dims, &np);
+    #pragma omp parallel num_threads(4)
+    {
 
-#ifdef DEBUG
-    FILE *fd = fopen("points.txt", "w");
-    for (int i = 0; i < np; ++i) {
-        print_point(pt_array[i], n_dims, stdout);
-        print_point(pt_array[i], n_dims, fd);
+        #pragma omp single
+        {
+            // Isto aqui me baixo não funciona como devia...
+            int total_n_threads = omp_get_num_threads();
+            printf("Total number of threads: %d\n", total_n_threads);
+
+            // 1. Get input sample points
+            pt_array = get_points(argc, argv, &n_dims, &np);
+
+            #ifdef DEBUG
+                FILE *fd = fopen("points.txt", "w");
+                for (int i = 0; i < np; ++i) {
+                    print_point(pt_array[i], n_dims, stdout);
+                    print_point(pt_array[i], n_dims, fd);
+                }
+                fclose(fd);
+            #endif
+
+            idx = (long *)malloc(sizeof(long) * np);
+
+        }
+    
+        #pragma omp for
+            for (int i = 0; i < np; ++i) {
+                if (i == 0)
+                    printf("Aqui!\n");
+                idx[i] = i;
+            }
+
+        #pragma omp single
+        {
+
+            proj_scalar = (double *)malloc(np * sizeof(double));
+            center1 = (double *)malloc(n_dims * sizeof(double));
+
+            tree = (node *)malloc((2 * np - 1) * sizeof(node));
+            for (int i = 0; i < (2 * np - 1); ++i)
+                tree[i].center = (double *)malloc(n_dims * sizeof(double));
+
+            ballAlg(0, np);
+
+            exec_time += omp_get_wtime();
+            fprintf(stderr, "%.3lf\n", exec_time);
+
+            print_tree(tree);
+
+            free(center1);
+
+            for (int i = 0; i < (2 * np - 1); ++i)
+                free(tree[i].center);
+            free(tree);
+
+            free(proj_scalar);
+            free(idx);
+            free(pt_array[0]);
+            free(pt_array);
+
+        }
+
     }
-    fclose(fd);
-#endif
-
-    idx = (long *)malloc(sizeof(long) * np);
-    for (int i = 0; i < np; ++i)
-        idx[i] = i;
-
-    proj_scalar = (double *)malloc(np * sizeof(double));
-    center1 = (double *)malloc(n_dims * sizeof(double));
-
-    tree = (node *)malloc((2 * np - 1) * sizeof(node));
-    for (int i = 0; i < (2 * np - 1); ++i)
-        tree[i].center = (double *)malloc(n_dims * sizeof(double));
-
-    ballAlg(0, np);
-
-    exec_time += omp_get_wtime();
-    fprintf(stderr, "%.3lf\n", exec_time);
-
-    print_tree(tree);
-
-    free(center1);
-
-    for (int i = 0; i < (2 * np - 1); ++i)
-        free(tree[i].center);
-    free(tree);
-
-    free(proj_scalar);
-    free(idx);
-    free(pt_array[0]);
-    free(pt_array);
 
     return 0;
 }
