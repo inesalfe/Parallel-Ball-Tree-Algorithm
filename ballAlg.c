@@ -35,7 +35,7 @@ double *proj_scalar;
 */
 long *idx;
 
-#pragma omp threadprivate(n_dims, np, pt_array, tree, proj_scalar)
+// #pragma omp threadprivate(proj_scalar)
 
 /* Function to print a point to a given file */
 void print_point(double *pt, int dim, FILE *fd) {
@@ -230,7 +230,7 @@ double *abproj;
 
 long n_nodes = 0; // Total number of tree nodes (in the end will equal 2 * np - 1)
 
-#pragma omp threadprivate(center1, abproj, n_nodes)
+// #pragma omp threadprivate(center1, abproj)
 
 /* Actual algorithm to compute the tree. */
 long ballAlg(long l, long r) {
@@ -356,22 +356,23 @@ int main(int argc, char **argv) {
         }
     
         #pragma omp for
-            for (int i = 0; i < np; ++i) {
-                if (i == 0)
-                    printf("Aqui!\n");
+            for (int i = 0; i < np; i++)
                 idx[i] = i;
-            }
 
         #pragma omp single
         {
-
             proj_scalar = (double *)malloc(np * sizeof(double));
             center1 = (double *)malloc(n_dims * sizeof(double));
 
             tree = (node *)malloc((2 * np - 1) * sizeof(node));
-            for (int i = 0; i < (2 * np - 1); ++i)
+        }
+
+        #pragma omp for
+            for (int i = 0; i < (2 * np - 1); i++)
                 tree[i].center = (double *)malloc(n_dims * sizeof(double));
 
+        #pragma omp single
+        {
             ballAlg(0, np);
 
             exec_time += omp_get_wtime();
@@ -389,7 +390,6 @@ int main(int argc, char **argv) {
             free(idx);
             free(pt_array[0]);
             free(pt_array);
-
         }
 
     }
