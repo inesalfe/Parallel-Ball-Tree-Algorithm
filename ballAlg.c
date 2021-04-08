@@ -261,9 +261,8 @@ long ballAlg(long l, long r) {
 
     // 3. Perform the orthogonal projection of all points onto line ab
 
-    // #pragma omp parallel for
-        for (int i = l; i < r; ++i)
-            proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
+    for (int i = l; i < r; ++i)
+        proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
 
     // 4. Compute the center, defined as the median point over all projections
     int m1, m2 = -1;
@@ -353,19 +352,16 @@ int main(int argc, char **argv) {
 
             idx = (long *)malloc(sizeof(long) * np);
 
+            proj_scalar = (double *)malloc(np * sizeof(double));
+            center1 = (double *)malloc(n_dims * sizeof(double));
+
+            tree = (node *)malloc((2 * np - 1) * sizeof(node));
+
         }
     
         #pragma omp for
             for (int i = 0; i < np; i++)
                 idx[i] = i;
-
-        #pragma omp single
-        {
-            proj_scalar = (double *)malloc(np * sizeof(double));
-            center1 = (double *)malloc(n_dims * sizeof(double));
-
-            tree = (node *)malloc((2 * np - 1) * sizeof(node));
-        }
 
         #pragma omp for
             for (int i = 0; i < (2 * np - 1); i++)
