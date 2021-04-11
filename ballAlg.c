@@ -236,67 +236,89 @@ double *abproj;
 long n_nodes = 0; // Total number of tree nodes (in the end will equal 2 * np - 1)
 
 /* Actual algorithm to compute the tree. */
-long ballAlg(long l, long r) {
+void ballAlg(long l, long r) {
+
+    long id;
+    long a, b;
+    int m1, m2 = -1;
+    id = n_nodes++;
+    double abnorm = 0.0;
 
     #pragma omp parallel num_threads(4)
     {
-        #pragma omp single
-        {
-         
-            // Ver id's
-            ++n_nodes;
-            long id = n_nodes - 1;
 
-            if (r - l == 1) {
+        if (r - l == 1) {
+            #pragma omp single
+            {
                 for (int i = 0; i < n_dims; ++i)
                     tree[id].center[i] = pt_array[idx[l]][i];
                 tree[id].radius = 0;
                 tree[id].left = -1;
                 tree[id].right = -1;
-                return id;
             }
+        }
 
-            long a, b;
+        else {
 
-            // 2. Compute points a and b, furthest apart in the current set (approx)
-            // Meter inline
-            furthest_apart(l, r, &a, &b);
+            #pragma omp single
+            {
+                // 2. Compute points a and b, furthest apart in the current set (approx)
+                // Meter inline
+                furthest_apart(l, r, &a, &b);
+            }
 
             // 3. Perform the orthogonal projection of all points onto line ab
+            #pragma omp for
+                for (int i = l; i < r; ++i)
+                    proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
 
-            for (int i = l; i < r; ++i)
-                proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
-
-            // 4. Compute the center, defined as the median point over all projections
-            int m1, m2 = -1;
-            get_median(l, r, &m1, &m2);
+            #pragma omp single
+            {
+                // 4. Compute the center, defined as the median point over all projections
+                get_median(l, r, &m1, &m2);
+            }
 
             if ((r - l) % 2) {
-                orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
+                double aux, u = proj_scalar[m1];
+                #pragma omp for reduction(+:abnorm)
+                    for (int i = 0; i < n_dims; ++i) {
+                        aux = (pt_array[b][i] - pt_array[a][i]);
+                        tree[id].center[i] = u * aux;
+                        abnorm += aux * aux;
+                    }
+                #pragma omp for
+                    for (int i = 0; i < n_dims; ++i)
+                    {
+                        tree[id].center[i] = tree[id].center[i] / abnorm + pt_array[a][i];
+                    }
             } else {
-                orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
-                orth_projv2(pt_array[a], pt_array[b], m2, center1);
-                for (int i = 0; i < n_dims; ++i)
-                    tree[id].center[i] = .5 * (tree[id].center[i] + center1[i]);
+                #pragma omp single
+                {
+                    orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
+                    orth_projv2(pt_array[a], pt_array[b], m2, center1);
+                    for (int i = 0; i < n_dims; ++i)
+                        tree[id].center[i] = .5 * (tree[id].center[i] + center1[i]);
+                }
             }
 
-            double max_r = 0, rad;
-            for (int i = l; i < r; ++i) {
-                rad = dist(tree[id].center, pt_array[idx[i]]);
-                if (rad > max_r)
-                    max_r = rad;
+            #pragma omp single
+            {
+
+                double max_r = 0, rad;
+                for (int i = l; i < r; ++i) {
+                    rad = dist(tree[id].center, pt_array[idx[i]]);
+                    if (rad > max_r)
+                        max_r = rad;
+                }
+                tree[id].radius = sqrt(max_r);
+
+
+                #pragma omp task
+                ballAlg(l, l + (r - l) / 2);
+                #pragma omp task
+                ballAlg(l + (r - l) / 2, r);
+
             }
-            tree[id].radius = sqrt(max_r);
-
-            // long L, R;
-
-            #pragma omp task
-            tree[id].left = ballAlg(l, l + (r - l) / 2);
-            #pragma omp task
-            tree[id].right = ballAlg(l + (r - l) / 2, r);
-
-            return id;
-
         }
     }
 }
@@ -365,7 +387,7 @@ int main(int argc, char **argv) {
     exec_time += omp_get_wtime();
     fprintf(stderr, "%.3lf\n", exec_time);
 
-    // print_tree(tree);
+    print_tree(tree);
 
     free(center1);
 
