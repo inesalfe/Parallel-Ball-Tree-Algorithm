@@ -118,22 +118,15 @@ double orth_projv1(double *a, double *b, double *p) {
 * vector into ab_proj. Uses the value already computed by the previous function (orth_projv1). */
 void orth_projv2(double *a, double *b, long idx_p, double *ab_proj) {
     double abnorm = 0.0, aux, u = proj_scalar[idx_p];
-    // #pragma omp parallel for private(aux) reduction(+:abnorm)
         for (int i = 0; i < n_dims; ++i) {
             aux = (b[i] - a[i]);
             ab_proj[i] = u * aux;
             abnorm += aux * aux;
         }
-
-// Como é que eu aproveito as threads criadas em cima para o for de baixo?
-    // #pragma omp for
         for (int i = 0; i < n_dims; ++i)
         {
             ab_proj[i] = ab_proj[i] / abnorm + a[i];
-            // printf("%d\n", omp_get_thread_num());
-            // fflush(stdout);
         }
-    // printf("Here!\n");
 }
 
 /* Comparison function: compares the orthogonal projections at indexes i and j. */
@@ -244,6 +237,8 @@ void ballAlg(long l, long r) {
     id = n_nodes++;
     double abnorm = 0.0;
     double max_r = 0;
+    long idx0 = idx[l];
+    double max_d = 0.0;
 
     #pragma omp parallel num_threads(4)
     {
@@ -261,11 +256,41 @@ void ballAlg(long l, long r) {
 
         else {
 
+            #pragma omp parallel for
+            for (int i = l + 1; i < r; ++i) {
+                if (idx[i] < idx0)
+                    #pragma omp critical
+                    idx0 = idx[i];
+            }
+
+            double d;
+            #pragma omp parallel for
+            for (int i = l; i < r; ++i) {
+                d = dist(pt_array[idx0], pt_array[idx[i]]);
+                if (d > max_d) {
+                    #pragma omp critical
+                        max_d = d;
+                    #pragma omp critical
+                        a = idx[i]; 
+                }
+            }
+
+            max_d = 0;
+            #pragma omp parallel for
+            for (int i = l; i < r; ++i) {
+                d = dist(pt_array[a], pt_array[idx[i]]);
+                if (d > max_d) {
+                    #pragma omp critical
+                        max_d = d;
+                    #pragma omp critical
+                        b = idx[i];
+                }
+            }
+
             #pragma omp single
             {
-                // 2. Compute points a and b, furthest apart in the current set (approx)
-                // Meter inline
-                furthest_apart(l, r, &a, &b);
+                if (pt_array[a][0] > pt_array[b][0])
+                    swap(&a, &b);
             }
 
             // 3. Perform the orthogonal projection of all points onto line ab
@@ -292,7 +317,10 @@ void ballAlg(long l, long r) {
                     {
                         tree[id].center[i] = tree[id].center[i] / abnorm + pt_array[a][i];
                     }
-            } else {
+            }
+
+            else {
+
                 #pragma omp single
                 {
                     orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
@@ -315,11 +343,10 @@ void ballAlg(long l, long r) {
 
             #pragma omp single
             {
-
                 tree[id].radius = sqrt(max_r);
-                #pragma omp task
+                // #pragma omp task
                 ballAlg(l, l + (r - l) / 2);
-                #pragma omp task
+                // #pragma omp task
                 ballAlg(l + (r - l) / 2, r);
 
             }
