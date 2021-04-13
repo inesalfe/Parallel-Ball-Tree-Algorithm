@@ -212,11 +212,12 @@ int get_kth_element2(int k, int l, int h) {
 * size of the set; Uses the partition method of quicksort, but only working with one of the
 * sets. This way, it is always better, or, in the worst case, equal, than quicksort. */
 void get_median(int l, int h, int *median_1, int *median_2) {
+
     if ((h - l) % 2 == 1)
-        *median_1 = get_kth_element((h - l - 1) / 2, l, h);
+        *median_1 = get_kth_element2((h - l - 1) / 2, l, h);
     else {
-        *median_1 = get_kth_element((h - l) / 2 - 1, l, h);
-        *median_2 = get_kth_element(0, l + (h - l) / 2, h);
+        *median_1 = get_kth_element2((h - l) / 2 - 1, l, h);
+        *median_2 = get_kth_element2(0, l + (h - l) / 2, h);
     }
 }
 
@@ -298,36 +299,51 @@ void ballAlg(long l, long r) {
                 for (int i = l; i < r; ++i)
                     proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
 
+            // 4. Compute the center, defined as the median point over all projections
             #pragma omp single
             {
-                // 4. Compute the center, defined as the median point over all projections
-                get_median(l, r, &m1, &m2);
+                if ((r - l) % 2 == 1)
+                    m1 = get_kth_element2((r - l - 1) / 2, l, r);
+                else {
+                    // #pragma omp task
+                    m1 = get_kth_element2((r - l) / 2 - 1, l, r);
+                    // #pragma omp task
+                    m2 = get_kth_element2(0, l + (r - l) / 2, r);
+                }
             }
 
-            if ((r - l) % 2) {
-                double aux, u = proj_scalar[m1];
-                #pragma omp for reduction(+:abnorm)
+            // #pragma omp taskwait
+
+            // // 4. Compute the center, defined as the median point over all projections
+            // #pragma omp single
+            // {
+            //     get_median(l, r, &m1, &m2);
+            // }
+
+            double aux, u = proj_scalar[m1];
+            #pragma omp for reduction(+:abnorm)
+                for (int i = 0; i < n_dims; ++i) {
+                    aux = (pt_array[b][i] - pt_array[a][i]);
+                    tree[id].center[i] = u * aux;
+                    abnorm += aux * aux;
+                }
+
+            if ((r - l) % 2 == 0) {
+                u = proj_scalar[m2];
+                #pragma omp for
                     for (int i = 0; i < n_dims; ++i) {
                         aux = (pt_array[b][i] - pt_array[a][i]);
-                        tree[id].center[i] = u * aux;
-                        abnorm += aux * aux;
+                        center1[i] = u * aux / abnorm + pt_array[a][i];
+                        tree[id].center[i] = 0.5 * (tree[id].center[i] / abnorm + pt_array[a][i] + center1[i]);
                     }
+            }
+            else {
                 #pragma omp for
                     for (int i = 0; i < n_dims; ++i)
                     {
                         tree[id].center[i] = tree[id].center[i] / abnorm + pt_array[a][i];
-                    }
-            }
-
-            else {
-
-                #pragma omp single
-                {
-                    orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
-                    orth_projv2(pt_array[a], pt_array[b], m2, center1);
-                    for (int i = 0; i < n_dims; ++i)
-                        tree[id].center[i] = .5 * (tree[id].center[i] + center1[i]);
-                }
+                        
+                    }                
             }
 
             double rad;
@@ -344,9 +360,9 @@ void ballAlg(long l, long r) {
             #pragma omp single
             {
                 tree[id].radius = sqrt(max_r);
-                // #pragma omp task
+                #pragma omp task
                 ballAlg(l, l + (r - l) / 2);
-                // #pragma omp task
+                #pragma omp task
                 ballAlg(l + (r - l) / 2, r);
 
             }
