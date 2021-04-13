@@ -243,6 +243,7 @@ void ballAlg(long l, long r) {
     int m1, m2 = -1;
     id = n_nodes++;
     double abnorm = 0.0;
+    double max_r = 0;
 
     #pragma omp parallel num_threads(4)
     {
@@ -301,18 +302,21 @@ void ballAlg(long l, long r) {
                 }
             }
 
+            double rad;
+            #pragma omp parallel for
+            for (int i = l; i < r; ++i) {
+                rad = dist(tree[id].center, pt_array[idx[i]]);
+                if (rad > max_r)
+                {
+                    #pragma omp critical
+                    max_r = rad;
+                }
+            }
+
             #pragma omp single
             {
 
-                double max_r = 0, rad;
-                for (int i = l; i < r; ++i) {
-                    rad = dist(tree[id].center, pt_array[idx[i]]);
-                    if (rad > max_r)
-                        max_r = rad;
-                }
                 tree[id].radius = sqrt(max_r);
-
-
                 #pragma omp task
                 ballAlg(l, l + (r - l) / 2);
                 #pragma omp task
@@ -328,7 +332,8 @@ void print_tree(node *tree) {
     FILE *fd = fopen("pts.txt", "w");
     fprintf(fd, "%d %ld\n", n_dims, 2 * np - 1);
     for (long i = 0; i < 2 * np - 1; ++i) {
-        fprintf(fd, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
+        // fprintf(fd, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
+        fprintf(fd, "%f ", tree[i].radius);
         print_point(tree[i].center, n_dims, fd);
     }
     fclose(fd);
