@@ -447,12 +447,7 @@ int main(int argc, char **argv) {
 			tree = (node *)malloc((2 * np - 1) * sizeof(node));
 
 		}
-
-		// #pragma omp single
-		//     for (int i = 0; i < np; i++) {
-		//         print_point(pt_array[i], n_dims, stdout);
-		//     }
-
+		
 		#pragma omp for
 			for (int i = 0; i < np; i++)
 				idx[i] = i;
