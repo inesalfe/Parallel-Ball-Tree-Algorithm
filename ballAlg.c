@@ -7,10 +7,10 @@
 // #define DEBUG
 
 typedef struct tree_node {
-    double *center;
-    double radius;
-    long left;
-    long right;
+	double *center;
+	double radius;
+	long left;
+	long right;
 } node;
 
 int n_dims; // Dimensions of the input points
@@ -39,9 +39,9 @@ long *idx;
 
 /* Function to print a point to a given file */
 void print_point(double *pt, int dim, FILE *fd) {
-    for (int i = 0; i < dim; ++i)
-        fprintf(fd, "%f ", pt[i]);
-    fprintf(fd, "\n");
+	for (int i = 0; i < dim; ++i)
+		fprintf(fd, "%f ", pt[i]);
+	fprintf(fd, "\n");
 }
 
 /* Computes the squared distance between 2 points;
@@ -51,51 +51,51 @@ void print_point(double *pt, int dim, FILE *fd) {
 * Everytime the actual distance is needed (when computing the radius of a set), 
 * the square root is computed outside the scope of this functions. */
 double dist(double *pt1, double *pt2) {
-    double dist = 0.0;
-    for (int d = 0; d < n_dims; ++d)
-        dist += (pt1[d] - pt2[d]) * (pt1[d] - pt2[d]);
-    return dist;
+	double dist = 0.0;
+	for (int d = 0; d < n_dims; ++d)
+		dist += (pt1[d] - pt2[d]) * (pt1[d] - pt2[d]);
+	return dist;
 }
 
 /* Function to swap two values */
 void swap(long *i, long *j) {
-    long temp = *i;
-    *i = *j;
-    *j = temp;
+	long temp = *i;
+	*i = *j;
+	*j = temp;
 }
 
 /* Computes an approximation of the two furthest apart points from the set */
 void furthest_apart(int l, int r, long *a_idx, long *b_idx) {
-    double max_d = 0.0;
-    double d;
-    /* Finds the element with lower index in the current set, which might not be
-    * idx[l];
-    * Not necessarily needed for a correct algorithm, but helps reproduce
-    * the teaching staff's tree, for easier comparison. */
-    long idx0 = idx[l];
-    for (int i = l + 1; i < r; ++i) {
-        if (idx[i] < idx0)
-            idx0 = idx[i];
-    }
-    for (int i = l; i < r; ++i) {
-        d = dist(pt_array[idx0], pt_array[idx[i]]);
-        if (d > max_d) {
-            max_d = d;
-            *a_idx = idx[i];
-        }
-    }
-    max_d = 0;
-    for (int i = l; i < r; ++i) {
-        d = dist(pt_array[*a_idx], pt_array[idx[i]]);
-        if (d > max_d) {
-            max_d = d;
-            *b_idx = idx[i];
-        }
-    }
-    /* Point a has always a smaller first coordinate than b (again, for easier comparison
-    * of results with those of the teaching staff). */
-    if (pt_array[*a_idx][0] > pt_array[*b_idx][0])
-        swap(a_idx, b_idx);
+	double max_d = 0.0;
+	double d;
+	/* Finds the element with lower index in the current set, which might not be
+	* idx[l];
+	* Not necessarily needed for a correct algorithm, but helps reproduce
+	* the teaching staff's tree, for easier comparison. */
+	long idx0 = idx[l];
+	for (int i = l + 1; i < r; ++i) {
+		if (idx[i] < idx0)
+			idx0 = idx[i];
+	}
+	for (int i = l; i < r; ++i) {
+		d = dist(pt_array[idx0], pt_array[idx[i]]);
+		if (d > max_d) {
+			max_d = d;
+			*a_idx = idx[i];
+		}
+	}
+	max_d = 0;
+	for (int i = l; i < r; ++i) {
+		d = dist(pt_array[*a_idx], pt_array[idx[i]]);
+		if (d > max_d) {
+			max_d = d;
+			*b_idx = idx[i];
+		}
+	}
+	/* Point a has always a smaller first coordinate than b (again, for easier comparison
+	* of results with those of the teaching staff). */
+	if (pt_array[*a_idx][0] > pt_array[*b_idx][0])
+		swap(a_idx, b_idx);
 }
 
 /* Orthogonal projection onto line ab - scalar:
@@ -105,37 +105,37 @@ void furthest_apart(int l, int r, long *a_idx, long *b_idx) {
 * The formula used is (p-a).(b-a), where p is the point from which we want to compute
 * the projection, and . denotes the dot product. */
 double orth_projv1(double *a, double *b, double *p) {
-    // Orthogonal projection in the first coordinate
-    double proj = 0.0;
-    for (int i = 0; i < n_dims; ++i)
-        proj += (p[i] - a[i]) * (b[i] - a[i]);
+	// Orthogonal projection in the first coordinate
+	double proj = 0.0;
+	for (int i = 0; i < n_dims; ++i)
+		proj += (p[i] - a[i]) * (b[i] - a[i]);
 
-    return proj;
+	return proj;
 }
 
 /* Orthogonal projection onto line ab - vector:
 * Computes the actual orthogonal projection in all coordinates, and stores the resulting
 * vector into ab_proj. Uses the value already computed by the previous function (orth_projv1). */
 void orth_projv2(double *a, double *b, long idx_p, double *ab_proj) {
-    double abnorm = 0.0, aux, u = proj_scalar[idx_p];
-        for (int i = 0; i < n_dims; ++i) {
-            aux = (b[i] - a[i]);
-            ab_proj[i] = u * aux;
-            abnorm += aux * aux;
-        }
-        for (int i = 0; i < n_dims; ++i)
-        {
-            ab_proj[i] = ab_proj[i] / abnorm + a[i];
-        }
+	double abnorm = 0.0, aux, u = proj_scalar[idx_p];
+		for (int i = 0; i < n_dims; ++i) {
+			aux = (b[i] - a[i]);
+			ab_proj[i] = u * aux;
+			abnorm += aux * aux;
+		}
+		for (int i = 0; i < n_dims; ++i)
+		{
+			ab_proj[i] = ab_proj[i] / abnorm + a[i];
+		}
 }
 
 /* Comparison function: compares the orthogonal projections at indexes i and j. */
 int is_seq(int i, int j) {
-    return proj_scalar[i] <= proj_scalar[j];
+	return proj_scalar[i] <= proj_scalar[j];
 }
 
 int cmp(const void *a, const void *b) {
-    return (proj_scalar[*(long *)a] > proj_scalar[*(long *)b] ? 1 : -1);
+	return (proj_scalar[*(long *)a] > proj_scalar[*(long *)b] ? 1 : -1);
 }
 
 /* Gets the k-th element of a piece of the projections array (from l to h):
@@ -150,62 +150,64 @@ int cmp(const void *a, const void *b) {
 */
 int get_kth_element(int k, int l, int h) {
 
-    if (h == l + 1)
-        return idx[l];
+	if (h == l + 1)
+		return idx[l];
 
-    else {
-        int i = l;
-        int j = h;
+	else {
+		int i = l;
+		int j = h;
 
-        while (i < j) {
-            do {
-                i++;
-            } while (i < h && is_seq(idx[i], idx[l]));
-            if (i == h) {
-                j = h - 1;
-                break;
-            }
-            do {
-                j--;
-            } while (!is_seq(idx[j], idx[l]));
-            if (i < j)
-                swap(&idx[i], &idx[j]);
-        }
+		while (i < j) {
+			do {
+				i++;
+			} while (i < h && is_seq(idx[i], idx[l]));
+			if (i == h) {
+				j = h - 1;
+				break;
+			}
+			do {
+				j--;
+			} while (!is_seq(idx[j], idx[l]));
+			if (i < j)
+				swap(&idx[i], &idx[j]);
+		}
 
-        swap(&idx[l], &idx[j]);
+		swap(&idx[l], &idx[j]);
 
-        if (j - l == k)
-            return idx[j];
-        if (k < j - l)
-            return get_kth_element(k, l, j);
-        else
-            return get_kth_element(k - (j - l) - 1, j + 1, h);
-    }
+		if (j - l == k)
+			return idx[j];
+		if (k < j - l)
+			return get_kth_element(k, l, j);
+		else
+			return get_kth_element(k - (j - l) - 1, j + 1, h);
+	}
 }
 
 /* Same as before, but with a different partition method. Used for comparison. */
 int get_kth_element2(int k, int l, int h) {
 
-    if (h == l + 1)
-        return idx[l];
+	if (h == l + 1)
+		return idx[l];
 
-    int i = l;
-    long pivot = idx[l];
+	int i = l;
+	long pivot = idx[l];
 
-    for (int j = l + 1; j < h; ++j) {
-        if (is_seq(idx[j], pivot)) {
-            ++i;
-            swap(&idx[i], &idx[j]);
-        }
-    }
-    swap(&idx[i], &idx[l]);
+	for (int j = l + 1; j < h; ++j)
+		if (is_seq(idx[j], pivot)) {
+			++i;
+			swap(&idx[i], &idx[j]);
+		}
+	
+	swap(&idx[i], &idx[l]);
 
-    if (i - l == k)
-        return idx[i];
-    if (k < i - l)
-        return get_kth_element2(k, l, i);
-    else
-        return get_kth_element2(k - (i - l) - 1, i + 1, h);
+	if (i - l == k)
+		return idx[i];
+
+	if (k < i - l)
+		return get_kth_element2(k, l, i);
+
+	else
+		return get_kth_element2(k - (i - l) - 1, i + 1, h);
 }
 
 /* Gets the median point of the current set in N.log(N) (average), where N is the
@@ -213,12 +215,12 @@ int get_kth_element2(int k, int l, int h) {
 * sets. This way, it is always better, or, in the worst case, equal, than quicksort. */
 void get_median(int l, int h, int *median_1, int *median_2) {
 
-    if ((h - l) % 2 == 1)
-        *median_1 = get_kth_element2((h - l - 1) / 2, l, h);
-    else {
-        *median_1 = get_kth_element2((h - l) / 2 - 1, l, h);
-        *median_2 = get_kth_element2(0, l + (h - l) / 2, h);
-    }
+	if ((h - l) % 2 == 1)
+		*median_1 = get_kth_element2((h - l - 1) / 2, l, h);
+	else {
+		*median_1 = get_kth_element2((h - l) / 2 - 1, l, h);
+		*median_2 = get_kth_element2(0, l + (h - l) / 2, h);
+	}
 }
 
 /* Auxiliar arrays:
@@ -232,154 +234,180 @@ long n_nodes = 0; // Total number of tree nodes (in the end will equal 2 * np - 
 /* Actual algorithm to compute the tree. */
 void ballAlg(long l, long r) {
 
-    long id;
-    long a, b;
-    int m1, m2 = -1;
-    id = n_nodes++;
-    double abnorm = 0.0;
-    double max_r = 0;
-    long idx0 = idx[l];
-    double max_d = 0.0;
+	long id;
+	long a = -1;
+	long b = -1;
+	int m1, m2 = -1;
+	id = n_nodes++;
+	double abnorm = 0.0;
 
-    #pragma omp parallel num_threads(4)
-    {
+	long idx0 = np;
+	double max_d = 0.0;
+	double max_r = 0.0;
 
-        if (r - l == 1) {
-            #pragma omp single
-            {
-                for (int i = 0; i < n_dims; ++i)
-                    tree[id].center[i] = pt_array[idx[l]][i];
-                tree[id].radius = 0;
-                tree[id].left = -1;
-                tree[id].right = -1;
-            }
-        }
+	#pragma omp parallel num_threads(4)
+	{
 
-        else {
+		if (r - l == 1) {
+			#pragma omp for
+			for (int i = 0; i < n_dims; ++i)
+				tree[id].center[i] = pt_array[idx[l]][i];
+			#pragma omp single
+			{
+				tree[id].radius = 0;
+				tree[id].left = -1;
+				tree[id].right = -1;
+			}
+		}
 
-            #pragma omp parallel for
-            for (int i = l + 1; i < r; ++i) {
-                if (idx[i] < idx0)
-                    #pragma omp critical
-                    idx0 = idx[i];
-            }
+		else {
 
-            double d;
-            #pragma omp parallel for
-            for (int i = l; i < r; ++i) {
-                d = dist(pt_array[idx0], pt_array[idx[i]]);
-                if (d > max_d) {
-                    #pragma omp critical
-                        max_d = d;
-                    #pragma omp critical
-                        a = idx[i]; 
-                }
-            }
+			long idx0_t = idx[l];
+			#pragma omp for
+				for (int i = l + 1; i < r; ++i) {
+					if (idx[i] < idx0_t)
+						idx0_t = idx[i];
+				}
 
-            max_d = 0;
-            #pragma omp parallel for
-            for (int i = l; i < r; ++i) {
-                d = dist(pt_array[a], pt_array[idx[i]]);
-                if (d > max_d) {
-                    #pragma omp critical
-                        max_d = d;
-                    #pragma omp critical
-                        b = idx[i];
-                }
-            }
+			#pragma omp critical
+			{
+				if (idx0_t < idx0)
+					idx0 = idx0_t;
+			}
 
-            #pragma omp single
-            {
-                if (pt_array[a][0] > pt_array[b][0])
-                    swap(&a, &b);
-            }
+			#pragma omp barrier
 
-            // 3. Perform the orthogonal projection of all points onto line ab
-            #pragma omp for
-                for (int i = l; i < r; ++i)
-                    proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
+			double d;
+			double max_d_t = 0.0;
+			long a_t = -1;
+			#pragma omp for
+				for (int i = l; i < r; ++i) {
+					d = dist(pt_array[idx0], pt_array[idx[i]]);
+					if (d > max_d_t) {
+						max_d_t = d;
+						a_t = idx[i]; 
+					}
+				}
 
-            // 4. Compute the center, defined as the median point over all projections
-            #pragma omp single
-            {
-                if ((r - l) % 2 == 1)
-                    m1 = get_kth_element2((r - l - 1) / 2, l, r);
-                else {
-                    // #pragma omp task
-                    m1 = get_kth_element2((r - l) / 2 - 1, l, r);
-                    // #pragma omp task
-                    m2 = get_kth_element2(0, l + (r - l) / 2, r);
-                }
-            }
+			#pragma omp critical
+			{
+				if (max_d_t > max_d) {
+					max_d = max_d_t;
+					a = a_t;
+				}
+			}
 
-            // #pragma omp taskwait
+			#pragma omp barrier
+			max_d = 0;
 
-            // // 4. Compute the center, defined as the median point over all projections
-            // #pragma omp single
-            // {
-            //     get_median(l, r, &m1, &m2);
-            // }
+			long b_t = -1;
+			max_d_t = 0;
+			#pragma omp for
+				for (int i = l; i < r; ++i) {
+					d = dist(pt_array[a], pt_array[idx[i]]);
+					if (d > max_d_t) {
+							max_d_t = d;
+							b_t = idx[i];
+					}
+				}
 
-            double aux, u = proj_scalar[m1];
-            #pragma omp for reduction(+:abnorm)
-                for (int i = 0; i < n_dims; ++i) {
-                    aux = (pt_array[b][i] - pt_array[a][i]);
-                    tree[id].center[i] = u * aux;
-                    abnorm += aux * aux;
-                }
+			#pragma omp critical
+			{
+				if (max_d_t > max_d) {
+					max_d = max_d_t;
+					b = b_t;
+				}
+			}
+			#pragma omp barrier
 
-            if ((r - l) % 2 == 0) {
-                u = proj_scalar[m2];
-                #pragma omp for
-                    for (int i = 0; i < n_dims; ++i) {
-                        aux = (pt_array[b][i] - pt_array[a][i]);
-                        center1[i] = u * aux / abnorm + pt_array[a][i];
-                        tree[id].center[i] = 0.5 * (tree[id].center[i] / abnorm + pt_array[a][i] + center1[i]);
-                    }
-            }
-            else {
-                #pragma omp for
-                    for (int i = 0; i < n_dims; ++i)
-                    {
-                        tree[id].center[i] = tree[id].center[i] / abnorm + pt_array[a][i];
-                        
-                    }                
-            }
+			#pragma omp single
+			{
+				if (pt_array[a][0] > pt_array[b][0])
+					swap(&a, &b);
+				// printf("%ld\n", a);
+				// printf("%ld\n", b);
+			}
 
-            double rad;
-            #pragma omp parallel for
-            for (int i = l; i < r; ++i) {
-                rad = dist(tree[id].center, pt_array[idx[i]]);
-                if (rad > max_r)
-                {
-                    #pragma omp critical
-                    max_r = rad;
-                }
-            }
+			// 3. Perform the orthogonal projection of all points onto line ab
+			#pragma omp for
+				for (int i = l; i < r; ++i) {
+					proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
+				}
 
-            #pragma omp single
-            {
-                tree[id].radius = sqrt(max_r);
-                #pragma omp task
-                ballAlg(l, l + (r - l) / 2);
-                #pragma omp task
-                ballAlg(l + (r - l) / 2, r);
+			// 4. Compute the center, defined as the median point over all projections
+			#pragma omp single
+			{
+				if ((r - l) % 2 == 1)
+					m1 = get_kth_element2((r - l - 1) / 2, l, r);
+				else {
+					m1 = get_kth_element2((r - l) / 2 - 1, l, r);
+					m2 = get_kth_element2(0, l + (r - l) / 2, r);
+				}
+			}
 
-            }
-        }
-    }
+			double aux, u = proj_scalar[m1];
+			#pragma omp for reduction(+:abnorm)
+				for (int i = 0; i < n_dims; ++i) {
+					aux = (pt_array[b][i] - pt_array[a][i]);
+					tree[id].center[i] = u * aux;
+					abnorm += aux * aux;
+				}
+
+			if ((r - l) % 2 == 0) {
+				u = proj_scalar[m2];
+				#pragma omp for
+					for (int i = 0; i < n_dims; ++i) {
+						aux = (pt_array[b][i] - pt_array[a][i]);
+						center1[i] = u * aux / abnorm + pt_array[a][i];
+						tree[id].center[i] = 0.5 * (tree[id].center[i] / abnorm + pt_array[a][i] + center1[i]);
+					}
+			}
+
+			else {
+				#pragma omp for
+					for (int i = 0; i < n_dims; ++i)
+						tree[id].center[i] = tree[id].center[i] / abnorm + pt_array[a][i];
+			}
+
+			double rad;
+			double max_r_t = 0;
+
+			#pragma omp for
+			for (int i = l; i < r; ++i) {
+				rad = dist(tree[id].center, pt_array[idx[i]]);
+				if (rad > max_r_t)
+					max_r_t = rad;
+			}
+
+			#pragma omp critical
+			{
+				if (max_r_t > max_r)
+					max_r = max_r_t;
+			}
+			#pragma omp barrier
+
+			#pragma omp single
+			{
+				tree[id].radius = sqrt(max_r);
+				#pragma omp task
+				ballAlg(l, l + (r - l) / 2);
+				#pragma omp task
+				ballAlg(l + (r - l) / 2, r);
+			}
+		}
+	}
 }
 
 /* Prints the resulting tree to a file or stdout. */
 void print_tree(node *tree) {
-    FILE *fd = fopen("pts.txt", "w");
-    fprintf(fd, "%d %ld\n", n_dims, 2 * np - 1);
-    for (long i = 0; i < 2 * np - 1; ++i) {
-        // fprintf(fd, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
-        fprintf(fd, "%f ", tree[i].radius);
-        print_point(tree[i].center, n_dims, fd);
-    }
-    fclose(fd);
+	FILE *fd = fopen("pts.txt", "w");
+	fprintf(fd, "%d %ld\n", n_dims, 2 * np - 1);
+	for (long i = 0; i < 2 * np - 1; ++i) {
+		// fprintf(fd, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
+		fprintf(fd, "%f ", tree[i].radius);
+		print_point(tree[i].center, n_dims, fd);
+	}
+	fclose(fd);
 }
 
 /* Main: gets the initial points, allocates all memory and calls the routine that creates the tree (ballAlg);
@@ -387,66 +415,71 @@ void print_tree(node *tree) {
 * Lastly, frees all memory used. */
 int main(int argc, char **argv) {
 
-    double exec_time;
-    exec_time = -omp_get_wtime();
+	double exec_time;
+	exec_time = -omp_get_wtime();
 
-    #pragma omp parallel num_threads(4)
-    {
+	#pragma omp parallel num_threads(4)
+	{
 
-        #pragma omp single
-        {
-            // Isto aqui me baixo não funciona como devia...
-            int total_n_threads = omp_get_num_threads();
-            printf("Total number of threads: %d\n", total_n_threads);
+		#pragma omp single
+		{
+			// Isto aqui me baixo não funciona como devia...
+			int total_n_threads = omp_get_num_threads();
+			printf("Total number of threads: %d\n", total_n_threads);
 
-            // 1. Get input sample points
-            pt_array = get_points(argc, argv, &n_dims, &np);
+			// 1. Get input sample points
+			pt_array = get_points(argc, argv, &n_dims, &np);
 
-            #ifdef DEBUG
-                FILE *fd = fopen("points.txt", "w");
-                for (int i = 0; i < np; ++i) {
-                    print_point(pt_array[i], n_dims, stdout);
-                    print_point(pt_array[i], n_dims, fd);
-                }
-                fclose(fd);
-            #endif
+			#ifdef DEBUG
+				FILE *fd = fopen("points.txt", "w");
+				for (int i = 0; i < np; ++i) {
+					print_point(pt_array[i], n_dims, stdout);
+					print_point(pt_array[i], n_dims, fd);
+				}
+				fclose(fd);
+			#endif
 
-            idx = (long *)malloc(sizeof(long) * np);
+			idx = (long *)malloc(sizeof(long) * np);
 
-            proj_scalar = (double *)malloc(np * sizeof(double));
-            center1 = (double *)malloc(n_dims * sizeof(double));
+			proj_scalar = (double *)malloc(np * sizeof(double));
+			center1 = (double *)malloc(n_dims * sizeof(double));
 
-            tree = (node *)malloc((2 * np - 1) * sizeof(node));
+			tree = (node *)malloc((2 * np - 1) * sizeof(node));
 
-        }
-    
-        #pragma omp for
-            for (int i = 0; i < np; i++)
-                idx[i] = i;
+		}
 
-        #pragma omp for
-            for (int i = 0; i < (2 * np - 1); i++)
-                tree[i].center = (double *)malloc(n_dims * sizeof(double));
+		// #pragma omp single
+		//     for (int i = 0; i < np; i++) {
+		//         print_point(pt_array[i], n_dims, stdout);
+		//     }
 
-    }
+		#pragma omp for
+			for (int i = 0; i < np; i++)
+				idx[i] = i;
 
-    ballAlg(0, np);
+		#pragma omp for
+			for (int i = 0; i < (2 * np - 1); i++)
+				tree[i].center = (double *)malloc(n_dims * sizeof(double));
 
-    exec_time += omp_get_wtime();
-    fprintf(stderr, "%.3lf\n", exec_time);
+	}
 
-    print_tree(tree);
+	ballAlg(0, np);
 
-    free(center1);
+	exec_time += omp_get_wtime();
+	fprintf(stderr, "%.3lf\n", exec_time);
 
-    for (int i = 0; i < (2 * np - 1); ++i)
-        free(tree[i].center);
-    free(tree);
+	print_tree(tree);
 
-    free(proj_scalar);
-    free(idx);
-    free(pt_array[0]);
-    free(pt_array);
+	free(center1);
 
-    return 0;
+	for (int i = 0; i < (2 * np - 1); ++i)
+		free(tree[i].center);
+	free(tree);
+
+	free(proj_scalar);
+	free(idx);
+	free(pt_array[0]);
+	free(pt_array);
+
+	return 0;
 }
