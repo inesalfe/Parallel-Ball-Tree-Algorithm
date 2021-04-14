@@ -229,16 +229,19 @@ void get_median(int l, int h, int *median_1, int *median_2) {
 double *center1;
 double *abproj;
 
-long n_nodes = 0; // Total number of tree nodes (in the end will equal 2 * np - 1)
+long n_nodes; // Total number of tree nodes (in the end will equal 2 * np - 1)
+long n_levels;
+long index_last;
+long n_last_level;
+long l_lower;
+long l_upper;
 
 /* Actual algorithm to compute the tree. */
-void ballAlg(long l, long r) {
+void ballAlg(long l, long r, long id) {
 
-	long id;
 	long a = -1;
 	long b = -1;
 	int m1, m2 = -1;
-	id = n_nodes++;
 	double abnorm = 0.0;
 
 	long idx0 = np;
@@ -389,10 +392,18 @@ void ballAlg(long l, long r) {
 			#pragma omp single
 			{
 				tree[id].radius = sqrt(max_r);
+				if (np%2 == 1 && id >= l_lower && id <= l_upper) {
+					tree[id].left = id + n_last_level - 1;
+					tree[id].right = id + n_last_level;
+				}
+				else {
+					tree[id].left = 2*id+1;
+					tree[id].right = 2*id+2;
+				}
 				#pragma omp task
-				ballAlg(l, l + (r - l) / 2);
+				ballAlg(l, l + (r - l) / 2, tree[id].left);
 				#pragma omp task
-				ballAlg(l + (r - l) / 2, r);
+				ballAlg(l + (r - l) / 2, r, tree[id].right);
 			}
 		}
 	}
@@ -403,8 +414,8 @@ void print_tree(node *tree) {
 	FILE *fd = fopen("pts.txt", "w");
 	fprintf(fd, "%d %ld\n", n_dims, 2 * np - 1);
 	for (long i = 0; i < 2 * np - 1; ++i) {
-		// fprintf(fd, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
-		fprintf(fd, "%f ", tree[i].radius);
+		fprintf(fd, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
+		// fprintf(fd, "%f ", tree[i].radius);
 		print_point(tree[i].center, n_dims, fd);
 	}
 	fclose(fd);
@@ -418,6 +429,21 @@ int main(int argc, char **argv) {
 	double exec_time;
 	exec_time = -omp_get_wtime();
 
+	n_nodes = 2 * np - 1;
+	// printf("n_nodes: %ld\n", n_nodes);
+	n_levels = 1 + ceil(log(np)/log(2));
+	// printf("n_levels: %ld\n", n_levels);
+	index_last = 0;
+	for (int i = 0; i < n_levels-1; i++)
+		index_last += pow(2, i);
+	// printf("index_last: %ld\n", index_last);
+	n_last_level = n_nodes - index_last;
+	// printf("n_last_level: %ld\n", n_last_level);
+	l_lower = pow(2, n_levels-2) - 1;
+	// printf("l_lower: %ld\n", l_lower);
+	l_upper = index_last - 1;
+	// printf("l_upper: %ld\n", l_upper);
+
 	#pragma omp parallel num_threads(4)
 	{
 
@@ -429,6 +455,21 @@ int main(int argc, char **argv) {
 
 			// 1. Get input sample points
 			pt_array = get_points(argc, argv, &n_dims, &np);
+
+			n_nodes = 2 * np - 1;
+			// printf("n_nodes: %ld\n", n_nodes);
+			n_levels = 1 + ceil(log(np)/log(2));
+			// printf("n_levels: %ld\n", n_levels);
+			index_last = 0;
+			for (int i = 0; i < n_levels-1; i++)
+				index_last += pow(2, i);
+			// printf("index_last: %ld\n", index_last);
+			n_last_level = n_nodes - index_last;
+			// printf("n_last_level: %ld\n", n_last_level);
+			l_lower = pow(2, n_levels-2) - 1;
+			// printf("l_lower: %ld\n", l_lower);
+			l_upper = index_last - 1;
+			// printf("l_upper: %ld\n", l_upper);
 
 			#ifdef DEBUG
 				FILE *fd = fopen("points.txt", "w");
@@ -444,7 +485,7 @@ int main(int argc, char **argv) {
 			proj_scalar = (double *)malloc(np * sizeof(double));
 			center1 = (double *)malloc(n_dims * sizeof(double));
 
-			tree = (node *)malloc((2 * np - 1) * sizeof(node));
+			tree = (node *)malloc(n_nodes * sizeof(node));
 
 		}
 		
@@ -453,12 +494,12 @@ int main(int argc, char **argv) {
 				idx[i] = i;
 
 		#pragma omp for
-			for (int i = 0; i < (2 * np - 1); i++)
+			for (int i = 0; i < n_nodes; i++)
 				tree[i].center = (double *)malloc(n_dims * sizeof(double));
 
 	}
 
-	ballAlg(0, np);
+	ballAlg(0, np, 0);
 
 	exec_time += omp_get_wtime();
 	fprintf(stderr, "%.3lf\n", exec_time);
@@ -467,7 +508,7 @@ int main(int argc, char **argv) {
 
 	free(center1);
 
-	for (int i = 0; i < (2 * np - 1); ++i)
+	for (int i = 0; i < n_nodes; ++i)
 		free(tree[i].center);
 	free(tree);
 
