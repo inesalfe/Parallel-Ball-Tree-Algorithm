@@ -250,7 +250,7 @@ long l_upper;
 /* Actual algorithm to compute the tree. */
 void ballAlg(long l, long r, long id) {
 
-	printf("tid: %d\n", omp_get_thread_num());
+	// printf("tid: %d\n", omp_get_thread_num());
 
 	long a = -1;
 	long b = -1;
@@ -261,7 +261,7 @@ void ballAlg(long l, long r, long id) {
 	double max_d = 0.0;
 	double max_r = 0.0;
 
-	#pragma omp parallel num_threads(4)
+	#pragma omp parallel num_threads(4) if (id < 3)
 	{
 
 		if (r - l == 1) {
