@@ -247,6 +247,8 @@ long n_last_level;
 long l_lower;
 long l_upper;
 
+int max_id;
+
 /* Actual algorithm to compute the tree. */
 void ballAlg(long l, long r, long id) {
 
@@ -261,7 +263,7 @@ void ballAlg(long l, long r, long id) {
 	double max_d = 0.0;
 	double max_r = 0.0;
 
-	#pragma omp parallel num_threads(4) if (id <= 50)
+	#pragma omp parallel num_threads(4) if (id <= max_id)
 	{
 
 		if (r - l == 1) {
@@ -443,6 +445,8 @@ void print_tree(node *tree) {
 * Lastly, frees all memory used. */
 int main(int argc, char **argv) {
 
+	max_id = 18;
+
 	double exec_time;
 	exec_time = -omp_get_wtime();
 
@@ -460,8 +464,6 @@ int main(int argc, char **argv) {
 	// printf("l_lower: %ld\n", l_lower);
 	l_upper = index_last - 1;
 	// printf("l_upper: %ld\n", l_upper);
-
-	// omp_set_nested(1);
 
 	#pragma omp parallel num_threads(4)
 	{
@@ -523,7 +525,7 @@ int main(int argc, char **argv) {
 	exec_time += omp_get_wtime();
 	fprintf(stderr, "%.3lf\n", exec_time);
 
-	//print_tree(tree);
+	print_tree(tree);
 
 	free(center1);
 
