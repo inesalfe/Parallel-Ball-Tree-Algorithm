@@ -184,44 +184,55 @@ int get_kth_element(int k, int l, int h) {
 }
 
 /* Same as before, but with a different partition method. Used for comparison. */
-int get_kth_element2(int k, int l, int h) {
+void get_kth_element2(int k, int l, int h) {
 
 	if (h == l + 1)
-		return idx[l];
+		return;
 
 	int i = l;
 	long pivot = idx[l];
 
-	for (int j = l + 1; j < h; ++j)
+	for (int j = l + 1; j < h; ++j) {
+		// for (int in = l; in < h; in++) {
+		// 	printf("%ld ", idx[in]);
+		// }
+		// printf("\n");
+		// for (int in = l; in < h; in++) {
+		// 	printf("%f ", proj_scalar[idx[in]]);
+		// }
+		// printf("\n");
 		if (is_seq(idx[j], pivot)) {
 			++i;
 			swap(&idx[i], &idx[j]);
-		}
+		}		
+	}
 	
 	swap(&idx[i], &idx[l]);
 
 	if (i - l == k)
-		return idx[i];
+		return;
 
 	if (k < i - l)
-		return get_kth_element2(k, l, i);
+		// #pragma omp task
+		get_kth_element2(k, l, i);
 
 	else
-		return get_kth_element2(k - (i - l) - 1, i + 1, h);
+		// #pragma omp task
+		get_kth_element2(k - (i - l) - 1, i + 1, h);
 }
 
 /* Gets the median point of the current set in N.log(N) (average), where N is the
 * size of the set; Uses the partition method of quicksort, but only working with one of the
 * sets. This way, it is always better, or, in the worst case, equal, than quicksort. */
-void get_median(int l, int h, int *median_1, int *median_2) {
+// void get_median(int l, int h, int *median_1, int *median_2) {
 
-	if ((h - l) % 2 == 1)
-		*median_1 = get_kth_element2((h - l - 1) / 2, l, h);
-	else {
-		*median_1 = get_kth_element2((h - l) / 2 - 1, l, h);
-		*median_2 = get_kth_element2(0, l + (h - l) / 2, h);
-	}
-}
+// 	if ((h - l) % 2 == 1)
+// 		*median_1 = get_kth_element2((h - l - 1) / 2, l, h);
+// 	else {
+// 		*median_1 = get_kth_element2((h - l) / 2 - 1, l, h);
+// 		*median_2 = get_kth_element2(0, l + (h - l) / 2, h);
+// 	}
+// }
 
 /* Auxiliar arrays:
 *  center1: when the set has an even number of points, stores one of the median points;
@@ -238,6 +249,8 @@ long l_upper;
 
 /* Actual algorithm to compute the tree. */
 void ballAlg(long l, long r, long id) {
+
+	printf("tid: %d\n", omp_get_thread_num());
 
 	long a = -1;
 	long b = -1;
@@ -337,16 +350,37 @@ void ballAlg(long l, long r, long id) {
 					proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
 				}
 
+			// #pragma omp single
+			// {
+			// 	for (int i = l; i < r; ++i) {
+			// 		printf("idx: %ld, proj: %f\n", idx[i], proj_scalar[idx[i]]);
+			// 	}
+			// 	printf("\n");
+			// }
+
 			// 4. Compute the center, defined as the median point over all projections
 			#pragma omp single
 			{
-				if ((r - l) % 2 == 1)
-					m1 = get_kth_element2((r - l - 1) / 2, l, r);
+				if ((r - l) % 2 == 1) {
+					get_kth_element2((r - l - 1) / 2, l, r);
+					m1 = idx[l + (r - l - 1) / 2];
+				}
 				else {
-					m1 = get_kth_element2((r - l) / 2 - 1, l, r);
-					m2 = get_kth_element2(0, l + (r - l) / 2, r);
+					get_kth_element2((r - l) / 2 - 1, l, r);
+					get_kth_element2(0, l + (r - l) / 2, r);
+					m1 = idx[l + (r - l) / 2 - 1];
+					m2 = idx[l + (r - l) / 2];
 				}
 			}
+
+			// #pragma omp single
+			// {
+			// 	for (int i = l; i < r; ++i) {
+			// 		printf("idx: %ld, proj: %f\n", idx[i], proj_scalar[idx[i]]);
+			// 	}
+			// 	printf("m1: %d, m2: %d\n", m1, m2);
+			// 	printf("\n");
+			// }
 
 			double aux, u = proj_scalar[m1];
 			#pragma omp for reduction(+:abnorm)
@@ -444,6 +478,8 @@ int main(int argc, char **argv) {
 	// printf("l_lower: %ld\n", l_lower);
 	l_upper = index_last - 1;
 	// printf("l_upper: %ld\n", l_upper);
+
+	// omp_set_nested(1);
 
 	#pragma omp parallel num_threads(4)
 	{
