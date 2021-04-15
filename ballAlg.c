@@ -367,23 +367,24 @@ void ballAlg(long l, long r, long id) {
 				}
 			}
 
-			double aux, u = proj_scalar[m1], u2 = proj_scalar[m2];
+			double aux, u = proj_scalar[m1];
 			#pragma omp for reduction(+:abnorm)
 				for (int i = 0; i < n_dims; ++i) {
 					aux = (pt_array[b][i] - pt_array[a][i]);
 					tree[id].center[i] = u * aux;
 					abnorm += aux * aux;
-					if ((r - l) % 2 == 0) {
-						center1[i] = u2 * aux / abnorm + pt_array[a][i];
-					}
 				}
 
 			if ((r - l) % 2 == 0) {
+				u = proj_scalar[m2];
 				#pragma omp for
 					for (int i = 0; i < n_dims; ++i) {
+						aux = (pt_array[b][i] - pt_array[a][i]);
+						center1[i] = u * aux / abnorm + pt_array[a][i];
 						tree[id].center[i] = 0.5 * (tree[id].center[i] / abnorm + pt_array[a][i] + center1[i]);
 					}
 			}
+			
 			else {
 				#pragma omp for
 					for (int i = 0; i < n_dims; ++i)
@@ -449,21 +450,6 @@ int main(int argc, char **argv) {
 
 	double exec_time;
 	exec_time = -omp_get_wtime();
-
-	n_nodes = 2 * np - 1;
-	// printf("n_nodes: %ld\n", n_nodes);
-	n_levels = 1 + ceil(log(np)/log(2));
-	// printf("n_levels: %ld\n", n_levels);
-	index_last = 0;
-	for (int i = 0; i < n_levels-1; i++)
-		index_last += pow(2, i);
-	// printf("index_last: %ld\n", index_last);
-	n_last_level = n_nodes - index_last;
-	// printf("n_last_level: %ld\n", n_last_level);
-	l_lower = pow(2, n_levels-2) - 1;
-	// printf("l_lower: %ld\n", l_lower);
-	l_upper = index_last - 1;
-	// printf("l_upper: %ld\n", l_upper);
 
 	#pragma omp parallel num_threads(4)
 	{
