@@ -250,7 +250,7 @@ long l_upper;
 /* Actual algorithm to compute the tree. */
 void ballAlg(long l, long r, long id) {
 
-	// printf("tid: %d\n", omp_get_thread_num());
+	// printf("id: %ld, tid: %d\n", id, omp_get_thread_num());
 
 	long a = -1;
 	long b = -1;
@@ -261,7 +261,7 @@ void ballAlg(long l, long r, long id) {
 	double max_d = 0.0;
 	double max_r = 0.0;
 
-	#pragma omp parallel num_threads(4) if (id < 3)
+	#pragma omp parallel num_threads(4) if (id <= 50)
 	{
 
 		if (r - l == 1) {
@@ -350,14 +350,6 @@ void ballAlg(long l, long r, long id) {
 					proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
 				}
 
-			// #pragma omp single
-			// {
-			// 	for (int i = l; i < r; ++i) {
-			// 		printf("idx: %ld, proj: %f\n", idx[i], proj_scalar[idx[i]]);
-			// 	}
-			// 	printf("\n");
-			// }
-
 			// 4. Compute the center, defined as the median point over all projections
 			#pragma omp single
 			{
@@ -373,33 +365,23 @@ void ballAlg(long l, long r, long id) {
 				}
 			}
 
-			// #pragma omp single
-			// {
-			// 	for (int i = l; i < r; ++i) {
-			// 		printf("idx: %ld, proj: %f\n", idx[i], proj_scalar[idx[i]]);
-			// 	}
-			// 	printf("m1: %d, m2: %d\n", m1, m2);
-			// 	printf("\n");
-			// }
-
-			double aux, u = proj_scalar[m1];
+			double aux, u = proj_scalar[m1], u2 = proj_scalar[m2];
 			#pragma omp for reduction(+:abnorm)
 				for (int i = 0; i < n_dims; ++i) {
 					aux = (pt_array[b][i] - pt_array[a][i]);
 					tree[id].center[i] = u * aux;
 					abnorm += aux * aux;
+					if ((r - l) % 2 == 0) {
+						center1[i] = u2 * aux / abnorm + pt_array[a][i];
+					}
 				}
 
 			if ((r - l) % 2 == 0) {
-				u = proj_scalar[m2];
 				#pragma omp for
 					for (int i = 0; i < n_dims; ++i) {
-						aux = (pt_array[b][i] - pt_array[a][i]);
-						center1[i] = u * aux / abnorm + pt_array[a][i];
 						tree[id].center[i] = 0.5 * (tree[id].center[i] / abnorm + pt_array[a][i] + center1[i]);
 					}
 			}
-
 			else {
 				#pragma omp for
 					for (int i = 0; i < n_dims; ++i)
@@ -541,7 +523,7 @@ int main(int argc, char **argv) {
 	exec_time += omp_get_wtime();
 	fprintf(stderr, "%.3lf\n", exec_time);
 
-	print_tree(tree);
+	//print_tree(tree);
 
 	free(center1);
 
