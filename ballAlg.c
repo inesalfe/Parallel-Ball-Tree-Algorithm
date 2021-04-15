@@ -392,7 +392,7 @@ void ballAlg(long l, long r, long id) {
 			#pragma omp single
 			{
 				tree[id].radius = sqrt(max_r);
-				if (np%2 == 1 && id >= l_lower && id <= l_upper) {
+				if (((np & (np - 1)) != 0) && id >= l_lower && id <= l_upper) {
 					tree[id].left = id + n_last_level - 1;
 					tree[id].right = id + n_last_level;
 				}
@@ -400,6 +400,7 @@ void ballAlg(long l, long r, long id) {
 					tree[id].left = 2*id+1;
 					tree[id].right = 2*id+2;
 				}
+				
 				#pragma omp task
 				ballAlg(l, l + (r - l) / 2, tree[id].left);
 				#pragma omp task
