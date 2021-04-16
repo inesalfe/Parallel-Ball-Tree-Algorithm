@@ -248,6 +248,7 @@ long l_lower;
 long l_upper;
 
 int max_id;
+long id_last;
 
 /* Actual algorithm to compute the tree. */
 void ballAlg(long l, long r, long id) {
@@ -410,15 +411,19 @@ void ballAlg(long l, long r, long id) {
 
 			#pragma omp single
 			{
-				tree[id].radius = sqrt(max_r);
-				if (((np & (np - 1)) != 0) && id >= l_lower && id <= l_upper) {
-					tree[id].left = id + n_last_level - 1;
-					tree[id].right = id + n_last_level;
-				}
-				else {
-					tree[id].left = 2*id+1;
-					tree[id].right = 2*id+2;
-				}
+			    if (((np & (np - 1)) != 0) && id >= l_lower && id <= l_upper) {
+					tree[id].left = id_last;
+			    	tree[id].right = id_last+1;
+			        #pragma omp critical
+				    {
+			        	id_last+=2;
+				    }
+			    }
+
+			    else {
+			        tree[id].left = 2*id+1;
+			        tree[id].right = 2*id+2;
+			    }
 				
 				#pragma omp task
 				ballAlg(l, l + (r - l) / 2, tree[id].left);
@@ -467,9 +472,7 @@ int main(int argc, char **argv) {
 			// printf("n_nodes: %ld\n", n_nodes);
 			n_levels = 1 + ceil(log(np)/log(2));
 			// printf("n_levels: %ld\n", n_levels);
-			index_last = 0;
-			for (int i = 0; i < n_levels-1; i++)
-				index_last += pow(2, i);
+			index_last = pow(2, n_levels-1) - 1;
 			// printf("index_last: %ld\n", index_last);
 			n_last_level = n_nodes - index_last;
 			// printf("n_last_level: %ld\n", n_last_level);
@@ -477,6 +480,8 @@ int main(int argc, char **argv) {
 			// printf("l_lower: %ld\n", l_lower);
 			l_upper = index_last - 1;
 			// printf("l_upper: %ld\n", l_upper);
+
+			id_last = l_upper+1;
 
 			#ifdef DEBUG
 				FILE *fd = fopen("points.txt", "w");
