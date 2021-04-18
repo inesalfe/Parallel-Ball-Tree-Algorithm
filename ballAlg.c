@@ -242,18 +242,12 @@ double *abproj;
 
 long n_nodes; // Total number of tree nodes (in the end will equal 2 * np - 1)
 long n_levels;
-long index_last;
-long n_last_level;
-long l_lower;
-long l_upper;
-
-int max_id;
 long id_last;
 
-/* Actual algorithm to compute the tree. */
-void ballAlg(long l, long r, long id) {
+int max_id;
 
-	// printf("id: %ld, tid: %d\n", id, omp_get_thread_num());
+/* Actual algorithm to compute the tree. */
+void ballAlg(long l, long r, long id, long lvl) {
 
 	long a = -1;
 	long b = -1;
@@ -343,8 +337,6 @@ void ballAlg(long l, long r, long id) {
 			{
 				if (pt_array[a][0] > pt_array[b][0])
 					swap(&a, &b);
-				// printf("%ld\n", a);
-				// printf("%ld\n", b);
 			}
 
 			// 3. Perform the orthogonal projection of all points onto line ab
@@ -411,9 +403,10 @@ void ballAlg(long l, long r, long id) {
 
 			#pragma omp single
 			{
-			    if (((np & (np - 1)) != 0) && id >= l_lower && id <= l_upper) {
-					tree[id].left = id_last;
-			    	tree[id].right = id_last+1;
+				tree[id].radius = sqrt(max_r);
+			    if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
+			        tree[id].left = id_last;
+			        tree[id].right = id_last + 1;
 			        #pragma omp critical
 				    {
 			        	id_last+=2;
@@ -426,9 +419,9 @@ void ballAlg(long l, long r, long id) {
 			    }
 				
 				#pragma omp task
-				ballAlg(l, l + (r - l) / 2, tree[id].left);
+				ballAlg(l, l + (r - l) / 2, tree[id].left, lvl+1);
 				#pragma omp task
-				ballAlg(l + (r - l) / 2, r, tree[id].right);
+				ballAlg(l + (r - l) / 2, r, tree[id].right, lvl+1);
 			}
 		}
 	}
@@ -440,7 +433,6 @@ void print_tree(node *tree) {
 	fprintf(fd, "%d %ld\n", n_dims, 2 * np - 1);
 	for (long i = 0; i < 2 * np - 1; ++i) {
 		fprintf(fd, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
-		// fprintf(fd, "%f ", tree[i].radius);
 		print_point(tree[i].center, n_dims, fd);
 	}
 	fclose(fd);
@@ -451,7 +443,7 @@ void print_tree(node *tree) {
 * Lastly, frees all memory used. */
 int main(int argc, char **argv) {
 
-	max_id = 18;
+	max_id = 2;
 
 	double exec_time;
 	exec_time = -omp_get_wtime();
@@ -461,27 +453,12 @@ int main(int argc, char **argv) {
 
 		#pragma omp single
 		{
-			// Isto aqui me baixo não funciona como devia...
-			int total_n_threads = omp_get_num_threads();
-			printf("Total number of threads: %d\n", total_n_threads);
-
 			// 1. Get input sample points
 			pt_array = get_points(argc, argv, &n_dims, &np);
 
-			n_nodes = 2 * np - 1;
-			// printf("n_nodes: %ld\n", n_nodes);
-			n_levels = 1 + ceil(log(np)/log(2));
-			// printf("n_levels: %ld\n", n_levels);
-			index_last = pow(2, n_levels-1) - 1;
-			// printf("index_last: %ld\n", index_last);
-			n_last_level = n_nodes - index_last;
-			// printf("n_last_level: %ld\n", n_last_level);
-			l_lower = pow(2, n_levels-2) - 1;
-			// printf("l_lower: %ld\n", l_lower);
-			l_upper = index_last - 1;
-			// printf("l_upper: %ld\n", l_upper);
-
-			id_last = l_upper+1;
+		    n_nodes = 2 * np - 1;
+		    n_levels = ceil(log(np) / log(2));
+		    id_last = pow(2, n_levels) - 1;
 
 			#ifdef DEBUG
 				FILE *fd = fopen("points.txt", "w");
@@ -511,7 +488,7 @@ int main(int argc, char **argv) {
 
 	}
 
-	ballAlg(0, np, 0);
+	ballAlg(0, np, 0, 0);
 
 	exec_time += omp_get_wtime();
 	fprintf(stderr, "%.3lf\n", exec_time);
