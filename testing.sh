@@ -104,9 +104,9 @@ fi
 
 # 2 6 8
 
-echo "--- 5 4 3 ---"
+echo "--- 2 6 8 ---"
 
-./ballAlg 5 4 3 2>&1
+./ballAlg 2 6 8 2>&1
 output=`./ballQuery pts.txt 3 7 2>&1`
 
 if [[ "$output" =~ "3.527607 7.895896" ]]; then
