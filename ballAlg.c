@@ -188,13 +188,12 @@ void get_median(int l, int h, int *median_1, int *median_2) {
 
 double *abproj;
 
-long n_nodes = 0; // Total number of tree nodes (in the end will equal 2 * np - 1)
+long n_nodes; // Total number of tree nodes (in the end will equal 2 * np - 1)
+long n_levels;
+long id_last;
 
-long ballAlg(long l, long r) {
-
-    ++n_nodes;
-    long id = n_nodes - 1;
-
+void ballAlg(long l, long r, long id, int lvl) {
+    
 #ifdef DEBUG
     printf("%ld %ld\n", l, r);
 #endif
@@ -205,7 +204,7 @@ long ballAlg(long l, long r) {
         tree[id].radius = 0;
         tree[id].left = -1;
         tree[id].right = -1;
-        return id;
+        return;
     }
 
     long a, b;
@@ -257,10 +256,18 @@ long ballAlg(long l, long r) {
     }
     tree[id].radius = sqrt(max_r);
 
-    tree[id].left = ballAlg(l, l + (r - l) / 2);
-    tree[id].right = ballAlg(l + (r - l) / 2, r);
+    if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
+        tree[id].left = id_last;
+        tree[id].right = id_last + 1;
+        id_last += 2;
+    } else {
+        tree[id].left = 2 * id + 1;
+        tree[id].right = 2 * id + 2;
+    }
 
-    return id;
+    ballAlg(l, l + (r - l) / 2, tree[id].left, lvl + 1);
+    ballAlg(l + (r - l) / 2, r, tree[id].right, lvl + 1);
+
 }
 
 void print_tree(node *tree) {
@@ -281,6 +288,10 @@ int main(int argc, char **argv) {
     // 1. Get input sample points
     pt_array = get_points(argc, argv, &n_dims, &np);
 
+    n_nodes = 2 * np - 1;
+    n_levels = ceil(log(np) / log(2));
+    id_last = pow(2, n_levels) - 1;
+
 #ifdef DEBUG
     FILE *fd = fopen("points.txt", "w");
     for (int i = 0; i < np; ++i) {
@@ -296,18 +307,18 @@ int main(int argc, char **argv) {
 
     proj_scalar = (double *)malloc(np * sizeof(double));
 
-    tree = (node *)malloc((2 * np - 1) * sizeof(node));
-    for (int i = 0; i < (2 * np - 1); ++i)
+    tree = (node *)malloc(n_nodes * sizeof(node));
+    for (int i = 0; i < n_nodes; ++i)
         tree[i].center = (double *)malloc(n_dims * sizeof(double));
 
-    ballAlg(0, np);
+    ballAlg(0, np, 0, 0);
 
     exec_time += omp_get_wtime();
     fprintf(stderr, "%.3lf\n", exec_time);
 
     print_tree(tree);
 
-    for (int i = 0; i < (2 * np - 1); ++i)
+    for (int i = 0; i < n_nodes; ++i)
         free(tree[i].center);
     free(tree);
 
