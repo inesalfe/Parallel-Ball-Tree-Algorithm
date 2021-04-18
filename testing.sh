@@ -1,6 +1,5 @@
 #!/bin/sh
 
-loop_variable=$5
 os="1"
 
 # 2 5 1
