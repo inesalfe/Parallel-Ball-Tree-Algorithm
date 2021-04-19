@@ -224,15 +224,15 @@ void get_kth_element2(int k, int l, int h) {
 /* Gets the median point of the current set in N.log(N) (average), where N is the
 * size of the set; Uses the partition method of quicksort, but only working with one of the
 * sets. This way, it is always better, or, in the worst case, equal, than quicksort. */
-// void get_median(int l, int h, int *median_1, int *median_2) {
+void get_median(int l, int h, int *median_1, int *median_2) {
 
-// 	if ((h - l) % 2 == 1)
-// 		*median_1 = get_kth_element2((h - l - 1) / 2, l, h);
-// 	else {
-// 		*median_1 = get_kth_element2((h - l) / 2 - 1, l, h);
-// 		*median_2 = get_kth_element2(0, l + (h - l) / 2, h);
-// 	}
-// }
+	if ((h - l) % 2 == 1)
+		*median_1 = get_kth_element((h - l - 1) / 2, l, h);
+	else {
+		*median_1 = get_kth_element((h - l) / 2 - 1, l, h);
+		*median_2 = get_kth_element(0, l + (h - l) / 2, h);
+	}
+}
 
 /* Auxiliar arrays:
 *  center1: when the set has an even number of points, stores one of the median points;
@@ -243,6 +243,84 @@ double *abproj;
 long n_nodes; // Total number of tree nodes (in the end will equal 2 * np - 1)
 long n_levels;
 long id_last;
+
+void ballAlg(long l, long r, long id, int lvl) {
+    
+#ifdef DEBUG
+    printf("%ld %ld\n", l, r);
+#endif
+
+    if (r - l == 1) {
+        for (int i = 0; i < n_dims; ++i)
+            tree[id].center[i] = pt_array[idx[l]][i];
+        tree[id].radius = 0;
+        tree[id].left = -1;
+        tree[id].right = -1;
+        return;
+    }
+
+    long a, b;
+    // 2. Compute points a and b, furthest apart in the current set (approx)
+    furthest_apart(l, r, &a, &b);
+
+#ifdef DEBUG
+    printf("a: %ld, b: %ld\n", a, b);
+#endif
+
+    // 3. Perform the orthogonal projection of all points onto line ab
+    for (int i = l; i < r; ++i)
+        proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
+
+    // 4. Compute the center, defined as the median point over all projections
+    int m1, m2 = -1;
+    get_median(l, r, &m1, &m2);
+
+#ifdef DEBUG
+    printf("Median index 1: %d, Median index 2: %d\nMedian point 1: ", m1, m2);
+    print_point(pt_array[m1], n_dims, stdout);
+#endif
+
+#ifdef DEBUG
+    printf("\tidx: ");
+    for (int i = 0; i < np; ++i)
+        printf("%ld ", idx[i]);
+    printf("\n");
+#endif
+
+    if ((r - l) % 2) {
+        orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
+    } else {
+        double abnorm = 0.0, aux, u = (proj_scalar[m1] + proj_scalar[m2]) / 2;
+        for (int i = 0; i < n_dims; ++i) {
+            aux = (pt_array[b][i] - pt_array[a][i]);
+            tree[id].center[i] = u * aux;
+            abnorm += aux * aux;
+        }
+        for (int i = 0; i < n_dims; ++i)
+            tree[id].center[i] = tree[id].center[i] / abnorm + pt_array[a][i];
+    }
+
+    double max_r = 0, rad;
+    for (int i = l; i < r; ++i) {
+        rad = dist(tree[id].center, pt_array[idx[i]]);
+        if (rad > max_r)
+            max_r = rad;
+    }
+    tree[id].radius = sqrt(max_r);
+
+    if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
+        tree[id].left = id_last;
+        tree[id].right = id_last + 1;
+        id_last += 2;
+    } else {
+        tree[id].left = 2 * id + 1;
+        tree[id].right = 2 * id + 2;
+    }
+
+    ballAlg(l, l + (r - l) / 2, tree[id].left, lvl + 1);
+    ballAlg(l + (r - l) / 2, r, tree[id].right, lvl + 1);
+
+}
 
 /* Actual algorithm to compute the tree. */
 void ballAlg_par(long l, long r, long id, long lvl) {
@@ -256,7 +334,13 @@ void ballAlg_par(long l, long r, long id, long lvl) {
 	double max_d = 0.0;
 	double max_r = 0.0;
 
-	#pragma omp parallel num_threads(4)
+	int threads;
+	if (lvl == 0)
+		threads = 4;
+	else
+		threads = 2;
+
+	#pragma omp parallel num_threads(threads)
 	{
 
 		if (r - l == 1) {
