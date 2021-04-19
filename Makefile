@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-O3 -Wall -g
+CFLAGS=-O3 -Wall
 
 ballAlg: gen_points.o ballAlg.c
 	$(CC) $(CFLAGS) ballAlg.c -o ballAlg gen_points.o -lm -fopenmp
