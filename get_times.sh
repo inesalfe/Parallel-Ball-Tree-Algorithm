@@ -1,7 +1,7 @@
 #!/bin/sh
 
 loop_variable=$5
-os="1"
+os="0"
 
 # 2 5 1
 
@@ -14,8 +14,8 @@ do
 	sum=$(echo $sum + $time | bc -l);
 done
 
-avg=$(echo $sum / 5 | bc -l);
-avg=`printf "%.3f" $avg`
+avg=$(echo $sum / $loop_variable | bc -l);
+# avg=`printf "%.3f" $avg`
 echo "Average time: $avg"
 
 # 2 8 1
@@ -23,13 +23,13 @@ echo "Average time: $avg"
 echo "--- 2 8 0 ---"
 
 sum=0
-for i in {1..5}
+for (( i=1; i<=5; i++ ))
 do
 	time=`./ballAlg 2 8 "$os" 2>&1`
 	sum=$(echo $sum + $time | bc -l);
 done
 
-avg=$(echo $sum / 5 | bc -l);
+avg=$(echo $sum / $loop_variable | bc -l);
 avg=`printf "%.3f" $avg`
 echo "Average time: $avg"
 
@@ -38,117 +38,117 @@ echo "Average time: $avg"
 echo "--- 20 1000000 0 ---"
 
 sum=0
-for i in {1..5}
+for (( i=1; i<=5; i++ ))
 do
 	time=`./ballAlg 20 1000000 "$os" 2>&1`
 	sum=$(echo $sum + $time | bc -l);
 done
 
-avg=$(echo $sum / 5 | bc -l);
+avg=$(echo $sum / $loop_variable | bc -l);
 avg=`printf "%.3f" $avg`
 echo "Average time: $avg"
 
-# 3 5000000 0
+# # 3 5000000 0
 
-echo "--- 3 5000000 0 ---"
+# echo "--- 3 5000000 0 ---"
 
-sum=0
-for i in {1..5}
-do
-	time=`./ballAlg 3 5000000 "$os" 2>&1`
-	sum=$(echo $sum + $time | bc -l);
-done
+# sum=0
+# for (( i=1; i<=5; i++ ))
+# do
+# 	time=`./ballAlg 3 5000000 "$os" 2>&1`
+# 	sum=$(echo $sum + $time | bc -l);
+# done
 
-avg=$(echo $sum / 5 | bc -l);
-avg=`printf "%.3f" $avg`
-echo "Average time: $avg"
+# avg=$(echo $sum / $loop_variable | bc -l);
+# avg=`printf "%.3f" $avg`
+# echo "Average time: $avg"
 
-# 4 10000000 0
+# # 4 10000000 0
 
-echo "--- 4 10000000 0 ---"
+# echo "--- 4 10000000 0 ---"
 
-sum=0
-for i in {1..5}
-do
-	time=`./ballAlg 4 10000000 "$os" 2>&1`
-	sum=$(echo $sum + $time | bc -l);
-done
+# sum=0
+# for (( i=1; i<=5; i++ ))
+# do
+# 	time=`./ballAlg 4 10000000 "$os" 2>&1`
+# 	sum=$(echo $sum + $time | bc -l);
+# done
 
-avg=$(echo $sum / 5 | bc -l);
-avg=`printf "%.3f" $avg`
-echo "Average time: $avg"
+# avg=$(echo $sum / $loop_variable | bc -l);
+# avg=`printf "%.3f" $avg`
+# echo "Average time: $avg"
 
-# 3 20000000 0
+# # 3 20000000 0
 
-echo "--- 3 20000000 0 ---"
+# echo "--- 3 20000000 0 ---"
 
-sum=0
-for i in {1..5}
-do
-	time=`./ballAlg 3 20000000 "$os" 2>&1`
-	sum=$(echo $sum + $time | bc -l);
-done
+# sum=0
+# for (( i=1; i<=5; i++ ))
+# do
+# 	time=`./ballAlg 3 20000000 "$os" 2>&1`
+# 	sum=$(echo $sum + $time | bc -l);
+# done
 
-avg=$(echo $sum / 5 | bc -l);
-avg=`printf "%.3f" $avg`
-echo "Average time: $avg"
+# avg=$(echo $sum / $loop_variable | bc -l);
+# avg=`printf "%.3f" $avg`
+# echo "Average time: $avg"
 
-# 4 20000000 0
+# # 4 20000000 0
 
-echo "--- 4 20000000 0 ---"
+# echo "--- 4 20000000 0 ---"
 
-sum=0
-for i in {1..5}
-do
-	time=`./ballAlg 4 20000000 "$os" 2>&1`
-	sum=$(echo $sum + $time | bc -l);
-done
+# sum=0
+# for (( i=1; i<=5; i++ ))
+# do
+# 	time=`./ballAlg 4 20000000 "$os" 2>&1`
+# 	sum=$(echo $sum + $time | bc -l);
+# done
 
-avg=$(echo $sum / 5 | bc -l);
-avg=`printf "%.3f" $avg`
-echo "Average time: $avg"
+# avg=$(echo $sum / $loop_variable | bc -l);
+# avg=`printf "%.3f" $avg`
+# echo "Average time: $avg"
 
-# 3 3 3
+# # 3 3 3
 
-echo "--- 3 3 3 ---"
+# echo "--- 3 3 3 ---"
 
-sum=0
-for i in {1..5}
-do
-	time=`./ballAlg 3 3 3 2>&1`
-	sum=$(echo $sum + $time | bc -l);
-done
+# sum=0
+# for (( i=1; i<=5; i++ ))
+# do
+# 	time=`./ballAlg 3 3 3 2>&1`
+# 	sum=$(echo $sum + $time | bc -l);
+# done
 
-avg=$(echo $sum / 5 | bc -l);
-avg=`printf "%.3f" $avg`
-echo "Average time: $avg"
+# avg=$(echo $sum / $loop_variable | bc -l);
+# avg=`printf "%.3f" $avg`
+# echo "Average time: $avg"
 
-# 5 4 3
+# # 5 4 3
 
-echo "--- 5 4 3 ---"
+# echo "--- 5 4 3 ---"
 
-sum=0
-for i in {1..5}
-do
-	time=`./ballAlg 5 4 3 2>&1`
-	sum=$(echo $sum + $time | bc -l);
-done
+# sum=0
+# for (( i=1; i<=5; i++ ))
+# do
+# 	time=`./ballAlg 5 4 3 2>&1`
+# 	sum=$(echo $sum + $time | bc -l);
+# done
 
-avg=$(echo $sum / 5 | bc -l);
-avg=`printf "%.3f" $avg`
-echo "Average time: $avg"
+# avg=$(echo $sum / $loop_variable | bc -l);
+# avg=`printf "%.3f" $avg`
+# echo "Average time: $avg"
 
-# 2 6 8
+# # 2 6 8
 
-echo "--- 2 6 8 ---"
+# echo "--- 2 6 8 ---"
 
-sum=0
-for i in {1..5}
-do
-	time=`./ballAlg 2 6 8 2>&1`
-	sum=$(echo $sum + $time | bc -l);
-done
+# sum=0
+# for (( i=1; i<=5; i++ ))
+# do
+# 	time=`./ballAlg 2 6 8 2>&1`
+# 	sum=$(echo $sum + $time | bc -l);
+# done
 
-avg=$(echo $sum / 5 | bc -l);
-avg=`printf "%.3f" $avg`
-echo "Average time: $avg"
+# avg=$(echo $sum / $loop_variable | bc -l);
+# avg=`printf "%.3f" $avg`
+# echo "Average time: $avg"

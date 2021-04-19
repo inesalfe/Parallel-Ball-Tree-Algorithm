@@ -502,17 +502,21 @@ void ballAlg_par(long l, long r, long id, long lvl) {
 			        tree[id].right = 2*id+2;
 			    }
 				
-				if (lvl == 0) {
-					#pragma omp task
-					ballAlg_par(l, l + (r - l) / 2, tree[id].left, lvl+1);
-					#pragma omp task
-					ballAlg_par(l + (r - l) / 2, r, tree[id].right, lvl+1);
-				}
-				else {
+				if (lvl == 1) {
 					#pragma omp task
 					ballAlg(l, l + (r - l) / 2, tree[id].left, lvl+1);
 					#pragma omp task
 					ballAlg(l + (r - l) / 2, r, tree[id].right, lvl+1);
+				}
+			}
+
+			if (lvl == 0) {
+				#pragma omp sections
+				{
+					#pragma omp section
+					ballAlg_par(l, l + (r - l) / 2, tree[id].left, lvl+1);
+					#pragma omp section
+					ballAlg_par(l + (r - l) / 2, r, tree[id].right, lvl+1);
 				}
 			}
 		}

@@ -317,10 +317,8 @@ void ballAlg(long l, long r, long id, int lvl) {
         tree[id].right = 2 * id + 2;
     }
 
-    #pragma omp task
-    	ballAlg(l, l + (r - l) / 2, tree[id].left, lvl + 1);
-    #pragma omp task
-    	ballAlg(l + (r - l) / 2, r, tree[id].right, lvl + 1);
+    ballAlg(l, l + (r - l) / 2, tree[id].left, lvl + 1);
+    ballAlg(l + (r - l) / 2, r, tree[id].right, lvl + 1);
 
 }
 
