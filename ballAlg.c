@@ -244,10 +244,8 @@ long n_nodes; // Total number of tree nodes (in the end will equal 2 * np - 1)
 long n_levels;
 long id_last;
 
-int max_id;
-
 /* Actual algorithm to compute the tree. */
-void ballAlg(long l, long r, long id, long lvl) {
+void ballAlg_par(long l, long r, long id, long lvl) {
 
 	long a = -1;
 	long b = -1;
@@ -258,7 +256,7 @@ void ballAlg(long l, long r, long id, long lvl) {
 	double max_d = 0.0;
 	double max_r = 0.0;
 
-	#pragma omp parallel num_threads(4) if (id <= max_id)
+	#pragma omp parallel num_threads(4)
 	{
 
 		if (r - l == 1) {
@@ -405,11 +403,11 @@ void ballAlg(long l, long r, long id, long lvl) {
 			{
 				tree[id].radius = sqrt(max_r);
 			    if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
-			        tree[id].left = id_last;
-			        tree[id].right = id_last + 1;
 			        #pragma omp critical
 				    {
-			        	id_last+=2;
+				        tree[id].left = id_last;
+				        tree[id].right = id_last + 1;
+				        id_last+=2;
 				    }
 			    }
 
@@ -418,10 +416,18 @@ void ballAlg(long l, long r, long id, long lvl) {
 			        tree[id].right = 2*id+2;
 			    }
 				
-				#pragma omp task
-				ballAlg(l, l + (r - l) / 2, tree[id].left, lvl+1);
-				#pragma omp task
-				ballAlg(l + (r - l) / 2, r, tree[id].right, lvl+1);
+				if (lvl == 0) {
+					#pragma omp task
+					ballAlg_par(l, l + (r - l) / 2, tree[id].left, lvl+1);
+					#pragma omp task
+					ballAlg_par(l + (r - l) / 2, r, tree[id].right, lvl+1);
+				}
+				else {
+					#pragma omp task
+					ballAlg(l, l + (r - l) / 2, tree[id].left, lvl+1);
+					#pragma omp task
+					ballAlg(l + (r - l) / 2, r, tree[id].right, lvl+1);
+				}
 			}
 		}
 	}
@@ -442,8 +448,6 @@ void print_tree(node *tree) {
 * Also computes the time it takes for the above computations, printing it and the resulting tree afterwards;
 * Lastly, frees all memory used. */
 int main(int argc, char **argv) {
-
-	max_id = 2;
 
 	double exec_time;
 	exec_time = -omp_get_wtime();
@@ -488,7 +492,7 @@ int main(int argc, char **argv) {
 
 	}
 
-	ballAlg(0, np, 0, 0);
+	ballAlg_par(0, np, 0, 0);
 
 	exec_time += omp_get_wtime();
 	fprintf(stderr, "%.3lf\n", exec_time);
