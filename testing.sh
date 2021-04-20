@@ -2,7 +2,7 @@
 
 os="1"
 
-# 2 5 1
+# 2 5 0
 
 echo "--- 2 5 0 ---"
 
@@ -15,7 +15,7 @@ else
   echo "Incorrect output"
 fi
 
-# 2 8 1
+# 2 8 0
 
 echo "--- 2 8 0 ---"
 

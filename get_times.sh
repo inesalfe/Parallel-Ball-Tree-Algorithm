@@ -1,7 +1,7 @@
 #!/bin/sh
 
 loop_variable=10
-os="0"
+os="1"
 
 # 2 5 1
 
