@@ -6,7 +6,7 @@
 #include "gen_points.h"
 
 typedef struct tree_node {
-	double *center;
+	long center_id;
 	double radius;
 	long left;
 	long right;
@@ -34,7 +34,7 @@ double *proj_scalar;
 */
 long *idx;
 
-// #pragma omp threadprivate(proj_scalar)
+double **centers;
 
 /* Function to print a point to a given file */
 void print_point(double *pt, int dim, FILE *fd) {
@@ -110,22 +110,6 @@ double orth_projv1(double *a, double *b, double *p) {
 		proj += (p[i] - a[i]) * (b[i] - a[i]);
 
 	return proj;
-}
-
-/* Orthogonal projection onto line ab - vector:
-* Computes the actual orthogonal projection in all coordinates, and stores the resulting
-* vector into ab_proj. Uses the value already computed by the previous function (orth_projv1). */
-void orth_projv2(double *a, double *b, long idx_p, double *ab_proj) {
-	double abnorm = 0.0, aux, u = proj_scalar[idx_p];
-		for (int i = 0; i < n_dims; ++i) {
-			aux = (b[i] - a[i]);
-			ab_proj[i] = u * aux;
-			abnorm += aux * aux;
-		}
-		for (int i = 0; i < n_dims; ++i)
-		{
-			ab_proj[i] = ab_proj[i] / abnorm + a[i];
-		}
 }
 
 /* Comparison function: compares the orthogonal projections at indexes i and j. */
@@ -204,12 +188,12 @@ double *abproj;
 long n_nodes; // Total number of tree nodes (in the end will equal 2 * np - 1)
 long n_levels;
 long id_last;
+long n_centers = 0;
 
 void ballAlg(long l, long r, long id, int lvl) {
 
     if (r - l == 1) {
-        for (int i = 0; i < n_dims; ++i)
-            tree[id].center[i] = pt_array[idx[l]][i];
+        tree[id].center_id = idx[l];
         tree[id].radius = 0;
         tree[id].left = -1;
         tree[id].right = -1;
@@ -217,6 +201,7 @@ void ballAlg(long l, long r, long id, int lvl) {
     }
 
     long a, b;
+	long c_id = -1;
     // 2. Compute points a and b, furthest apart in the current set (approx)
     furthest_apart(l, r, &a, &b);
 
@@ -226,33 +211,41 @@ void ballAlg(long l, long r, long id, int lvl) {
 
     // 4. Compute the center, defined as the median point over all projections
     int m1, m2 = -1;
+    double u, aux;
+    double abnorm = 0;
     get_median(l, r, &m1, &m2);
+    #pragma omp critical
+    	c_id = n_centers++;
 
-    if ((r - l) % 2) {
-        orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
-    } else {
-        double abnorm = 0.0, aux, u = (proj_scalar[m1] + proj_scalar[m2]) / 2;
-        for (int i = 0; i < n_dims; ++i) {
-            aux = (pt_array[b][i] - pt_array[a][i]);
-            tree[id].center[i] = u * aux;
-            abnorm += aux * aux;
-        }
-        for (int i = 0; i < n_dims; ++i)
-            tree[id].center[i] = tree[id].center[i] / abnorm + pt_array[a][i];
+	if ((r - l) % 2)
+        u = proj_scalar[m1];
+    else
+        u = (proj_scalar[m1] + proj_scalar[m2]) / 2;
+
+    for (int i = 0; i < n_dims; ++i) {
+        aux = (pt_array[b][i] - pt_array[a][i]);
+        centers[c_id][i] = u * aux;
+        abnorm += aux * aux;
     }
+    for (int i = 0; i < n_dims; ++i)
+        centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
 
     double max_r = 0, rad;
     for (int i = l; i < r; ++i) {
-        rad = dist(tree[id].center, pt_array[idx[i]]);
+        rad = dist(centers[c_id], pt_array[idx[i]]);
         if (rad > max_r)
             max_r = rad;
     }
     tree[id].radius = sqrt(max_r);
+    tree[id].center_id = c_id;
 
     if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
-        tree[id].left = id_last;
-        tree[id].right = id_last + 1;
-        id_last += 2;
+    	#pragma omp critical
+    	{
+	        tree[id].left = id_last;
+	        tree[id].right = id_last + 1;
+	        id_last += 2;
+    	}
     } else {
         tree[id].left = 2 * id + 1;
         tree[id].right = 2 * id + 2;
@@ -276,16 +269,16 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 	long idx0 = np;
 	double max_d = 0.0;
 	double max_r = 0.0;
+	long c_id = -1;
+	double u;
 
 	#pragma omp parallel num_threads(threads)
 	{
 
 		if (r - l == 1) {
-			#pragma omp for
-			for (int i = 0; i < n_dims; ++i)
-				tree[id].center[i] = pt_array[idx[l]][i];
 			#pragma omp single
 			{
+				tree[id].center_id = idx[l];
 				tree[id].radius = 0;
 				tree[id].left = -1;
 				tree[id].right = -1;
@@ -368,38 +361,38 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 			#pragma omp single
 			{
 				get_median(l, r, &m1, &m2);
-			}
-
-			double aux, u = proj_scalar[m1];
-			#pragma omp for reduction(+:abnorm)
-				for (int i = 0; i < n_dims; ++i) {
-					aux = (pt_array[b][i] - pt_array[a][i]);
-					tree[id].center[i] = u * aux;
-					abnorm += aux * aux;
+				#pragma omp critical
+				{
+					c_id = n_centers++;
 				}
-
-			if ((r - l) % 2 == 0) {
-				u = proj_scalar[m2];
-				#pragma omp for
-					for (int i = 0; i < n_dims; ++i) {
-						aux = (pt_array[b][i] - pt_array[a][i]);
-						center1[i] = u * aux / abnorm + pt_array[a][i];
-						tree[id].center[i] = 0.5 * (tree[id].center[i] / abnorm + pt_array[a][i] + center1[i]);
-					}
 			}
 			
-			else {
-				#pragma omp for
-					for (int i = 0; i < n_dims; ++i)
-						tree[id].center[i] = tree[id].center[i] / abnorm + pt_array[a][i];
+			#pragma omp single
+			{
+				if ((r - l) % 2)
+				    u = proj_scalar[m1];
+			    else
+			        u = (proj_scalar[m1] + proj_scalar[m2]) / 2;
 			}
+
+			double aux;
+			#pragma omp for reduction(+:abnorm)
+			    for (int i = 0; i < n_dims; ++i) {
+			        aux = (pt_array[b][i] - pt_array[a][i]);
+			        centers[c_id][i] = u * aux;
+			        abnorm += aux * aux;
+			    }
+
+			#pragma omp for
+		    	for (int i = 0; i < n_dims; ++i)
+		        	centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
 
 			double rad;
 			double max_r_t = 0;
 
 			#pragma omp for
 			for (int i = l; i < r; ++i) {
-				rad = dist(tree[id].center, pt_array[idx[i]]);
+				rad = dist(centers[c_id], pt_array[idx[i]]);
 				if (rad > max_r_t)
 					max_r_t = rad;
 			}
@@ -414,6 +407,7 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 			#pragma omp single
 			{
 				tree[id].radius = sqrt(max_r);
+				tree[id].center_id = c_id;
 			    if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
 			        #pragma omp critical
 				    {
@@ -447,18 +441,24 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 
 /* Prints the resulting tree to a file or stdout. */
 void print_tree(node *tree) {
-	FILE *fd = fopen("pts.txt", "w");
-	fprintf(fd, "%d %ld\n", n_dims, 2 * np - 1);
-	for (long i = 0; i < 2 * np - 1; ++i) {
-		fprintf(fd, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
-		print_point(tree[i].center, n_dims, fd);
-	}
-	fclose(fd);
+    FILE *fd = fopen("pts.txt", "w");
+    fprintf(fd, "%d %ld\n", n_dims, 2 * np - 1);
+    for (long i = 0; i < 2 * np - 1; ++i) {
+        fprintf(fd, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
+        if (tree[i].left == -1)
+            print_point(pt_array[tree[i].center_id], n_dims, fd);
+        else
+            print_point(centers[tree[i].center_id], n_dims, fd);
+    }
+    fclose(fd);
 }
 
 /* Main: gets the initial points, allocates all memory and calls the routine that creates the tree (ballAlg);
 * Also computes the time it takes for the above computations, printing it and the resulting tree afterwards;
 * Lastly, frees all memory used. */
+
+double * center_aux;
+
 int main(int argc, char **argv) {
 	
 	int threads;
@@ -487,32 +487,22 @@ int main(int argc, char **argv) {
 		    n_levels = ceil(log(np) / log(2));
 		    id_last = pow(2, n_levels) - 1;
 
-			#ifdef DEBUG
-				FILE *fd = fopen("points.txt", "w");
-				for (int i = 0; i < np; ++i) {
-					print_point(pt_array[i], n_dims, stdout);
-					print_point(pt_array[i], n_dims, fd);
-				}
-				fclose(fd);
-			#endif
-
 			idx = (long *)malloc(sizeof(long) * np);
 
 			proj_scalar = (double *)malloc(np * sizeof(double));
-			center1 = (double *)malloc(n_dims * sizeof(double));
 
 			tree = (node *)malloc(n_nodes * sizeof(node));
+
+			center_aux = (double *)malloc(np * n_dims * sizeof(double));
+			centers = (double **)malloc(np * sizeof(double *));
 
 		}
 		
 		#pragma omp for
-			for (int i = 0; i < np; i++)
+			for (int i = 0; i < np; i++) {
 				idx[i] = i;
-
-		#pragma omp for
-			for (int i = 0; i < n_nodes; i++)
-				tree[i].center = (double *)malloc(n_dims * sizeof(double));
-
+				centers[i] = &center_aux[i * n_dims];
+			}
 	}
 
 	ballAlg_par(0, np, 0, 0, threads);
@@ -522,16 +512,15 @@ int main(int argc, char **argv) {
 
 	// print_tree(tree);
 
-	free(center1);
-
-	for (int i = 0; i < n_nodes; ++i)
-		free(tree[i].center);
 	free(tree);
 
 	free(proj_scalar);
 	free(idx);
 	free(pt_array[0]);
 	free(pt_array);
+
+	free(centers[0]);
+    free(centers);
 
 	return 0;
 }
