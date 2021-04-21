@@ -313,7 +313,7 @@ int main(int argc, char **argv) {
     double exec_time;
     exec_time = -omp_get_wtime();
 
-    #pragma omp parallel num_threads(4)
+    #pragma omp parallel
     {
         #pragma omp single
         {
@@ -446,7 +446,7 @@ int main(int argc, char **argv) {
     exec_time += omp_get_wtime();
     fprintf(stderr, "%.3lf\n", exec_time);
 
-    print_tree(tree);
+    // print_tree(tree);
 
     for (int i = 0; i < 2 * np - 1; ++i)
         free(tree[i].center);
