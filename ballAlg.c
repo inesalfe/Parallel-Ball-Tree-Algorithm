@@ -4,7 +4,6 @@
 #include <stdlib.h>
 
 #include "gen_points.h"
-// #define DEBUG
 
 typedef struct tree_node {
 	double *center;
@@ -183,44 +182,6 @@ int get_kth_element(int k, int l, int h) {
 	}
 }
 
-/* Same as before, but with a different partition method. Used for comparison. */
-void get_kth_element2(int k, int l, int h) {
-
-	if (h == l + 1)
-		return;
-
-	int i = l;
-	long pivot = idx[l];
-
-	for (int j = l + 1; j < h; ++j) {
-		// for (int in = l; in < h; in++) {
-		// 	printf("%ld ", idx[in]);
-		// }
-		// printf("\n");
-		// for (int in = l; in < h; in++) {
-		// 	printf("%f ", proj_scalar[idx[in]]);
-		// }
-		// printf("\n");
-		if (is_seq(idx[j], pivot)) {
-			++i;
-			swap(&idx[i], &idx[j]);
-		}		
-	}
-	
-	swap(&idx[i], &idx[l]);
-
-	if (i - l == k)
-		return;
-
-	if (k < i - l)
-		// #pragma omp task
-		get_kth_element2(k, l, i);
-
-	else
-		// #pragma omp task
-		get_kth_element2(k - (i - l) - 1, i + 1, h);
-}
-
 /* Gets the median point of the current set in N.log(N) (average), where N is the
 * size of the set; Uses the partition method of quicksort, but only working with one of the
 * sets. This way, it is always better, or, in the worst case, equal, than quicksort. */
@@ -245,10 +206,6 @@ long n_levels;
 long id_last;
 
 void ballAlg(long l, long r, long id, int lvl) {
-    
-#ifdef DEBUG
-    printf("%ld %ld\n", l, r);
-#endif
 
     if (r - l == 1) {
         for (int i = 0; i < n_dims; ++i)
@@ -263,10 +220,6 @@ void ballAlg(long l, long r, long id, int lvl) {
     // 2. Compute points a and b, furthest apart in the current set (approx)
     furthest_apart(l, r, &a, &b);
 
-#ifdef DEBUG
-    printf("a: %ld, b: %ld\n", a, b);
-#endif
-
     // 3. Perform the orthogonal projection of all points onto line ab
     for (int i = l; i < r; ++i)
         proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
@@ -274,18 +227,6 @@ void ballAlg(long l, long r, long id, int lvl) {
     // 4. Compute the center, defined as the median point over all projections
     int m1, m2 = -1;
     get_median(l, r, &m1, &m2);
-
-#ifdef DEBUG
-    printf("Median index 1: %d, Median index 2: %d\nMedian point 1: ", m1, m2);
-    print_point(pt_array[m1], n_dims, stdout);
-#endif
-
-#ifdef DEBUG
-    printf("\tidx: ");
-    for (int i = 0; i < np; ++i)
-        printf("%ld ", idx[i]);
-    printf("\n");
-#endif
 
     if ((r - l) % 2) {
         orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
@@ -426,16 +367,7 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 			// 4. Compute the center, defined as the median point over all projections
 			#pragma omp single
 			{
-				if ((r - l) % 2 == 1) {
-					get_kth_element2((r - l - 1) / 2, l, r);
-					m1 = idx[l + (r - l - 1) / 2];
-				}
-				else {
-					get_kth_element2((r - l) / 2 - 1, l, r);
-					get_kth_element2(0, l + (r - l) / 2, r);
-					m1 = idx[l + (r - l) / 2 - 1];
-					m2 = idx[l + (r - l) / 2];
-				}
+				get_median(l, r, &m1, &m2);
 			}
 
 			double aux, u = proj_scalar[m1];
