@@ -271,10 +271,12 @@ void ballAlg(long l, long r, long id, int lvl) {
     tree[id].radius = sqrt(max_r);
 
     if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
-        tree[id].left = id_last;
-        tree[id].right = id_last + 1;
         #pragma omp critical
+        {
+            tree[id].left = id_last;
+            tree[id].right = id_last + 1;
             id_last += 2;
+        }
     } else {
         tree[id].left = 2 * id + 1;
         tree[id].right = 2 * id + 2;
