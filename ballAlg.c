@@ -4,7 +4,6 @@
 #include <stdlib.h>
 
 #include "gen_points.h"
-// #define DEBUG
 
 typedef struct tree_node {
     double *center;
@@ -178,31 +177,6 @@ int get_kth_element(int k, int l, int h) {
         else
             return get_kth_element(k - (j - l) - 1, j + 1, h);
     }
-}
-
-/* Same as before, but with a different partition method. Used for comparison. */
-int get_kth_element2(int k, int l, int h) {
-
-    if (h == l + 1)
-        return idx[l];
-
-    int i = l;
-    long pivot = idx[l];
-
-    for (int j = l + 1; j < h; ++j) {
-        if (is_seq(idx[j], pivot)) {
-            ++i;
-            swap(&idx[i], &idx[j]);
-        }
-    }
-    swap(&idx[i], &idx[l]);
-
-    if (i - l == k)
-        return idx[i];
-    if (k < i - l)
-        return get_kth_element2(k, l, i);
-    else
-        return get_kth_element2(k - (i - l) - 1, i + 1, h);
 }
 
 /* Gets the median point of the current set in N.log(N) (average), where N is the
@@ -396,12 +370,7 @@ int main(int argc, char **argv) {
 // 4. Compute the center, defined as the median point over all projections
         #pragma omp single
         {
-            if ((r - l) % 2 == 1) {
-                m1 = get_kth_element((r - l - 1) / 2, l, r);
-            } else {
-                m1 = get_kth_element((r - l) / 2 - 1, l, r);
-                m2 = get_kth_element(0, l + (r - l) / 2, r);
-            }
+            get_median(l, r, &m1, &m2);
         }
 
         double aux, u;
