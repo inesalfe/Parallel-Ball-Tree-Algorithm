@@ -543,7 +543,10 @@ int main(int argc, char **argv) {
 		{
 			
 			threads = omp_get_num_threads();
-			max_parallel_level = ceil(log(threads) / log(2)) - 1;
+			if (threads == 1)
+				max_parallel_level = 0;
+			else
+				max_parallel_level = ceil(log(threads) / log(2)) - 1;
 			
 			// 1. Get input sample points
 			pt_array = get_points(argc, argv, &n_dims, &np);
@@ -585,7 +588,7 @@ int main(int argc, char **argv) {
 	exec_time += omp_get_wtime();
 	fprintf(stderr, "%.3lf\n", exec_time);
 
-	print_tree(tree);
+	// print_tree(tree);
 
 	free(center1);
 

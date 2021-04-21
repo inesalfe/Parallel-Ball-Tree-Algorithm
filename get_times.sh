@@ -1,7 +1,7 @@
 #!/bin/sh
 
 loop_variable=10
-os="1"
+os="0"
 
 # 2 5 1
 
@@ -11,6 +11,7 @@ sum=0
 for (( i=0; i<loop_variable; i++ ))
 do
 	time=`./ballAlg 2 5 "$os" 2>&1`
+	echo "$time"
 	sum=$(echo $sum + $time | bc -l);
 done
 
@@ -26,6 +27,7 @@ sum=0
 for (( i=0; i<loop_variable; i++ ))
 do
 	time=`./ballAlg 2 8 "$os" 2>&1`
+	echo "$time"
 	sum=$(echo $sum + $time | bc -l);
 done
 
@@ -41,6 +43,7 @@ sum=0
 for (( i=0; i<loop_variable; i++ ))
 do
 	time=`./ballAlg 20 1000000 "$os" 2>&1`
+	echo "$time"
 	sum=$(echo $sum + $time | bc -l);
 done
 
@@ -56,6 +59,7 @@ sum=0
 for (( i=0; i<loop_variable; i++ ))
 do
 	time=`./ballAlg 3 5000000 "$os" 2>&1`
+	echo "$time"
 	sum=$(echo $sum + $time | bc -l);
 done
 
@@ -71,6 +75,7 @@ sum=0
 for (( i=0; i<loop_variable; i++ ))
 do
 	time=`./ballAlg 4 10000000 "$os" 2>&1`
+	echo "$time"
 	sum=$(echo $sum + $time | bc -l);
 done
 
@@ -86,6 +91,7 @@ sum=0
 for (( i=0; i<loop_variable; i++ ))
 do
 	time=`./ballAlg 3 20000000 "$os" 2>&1`
+	echo "$time"
 	sum=$(echo $sum + $time | bc -l);
 done
 
@@ -101,6 +107,7 @@ sum=0
 for (( i=0; i<loop_variable; i++ ))
 do
 	time=`./ballAlg 4 20000000 "$os" 2>&1`
+	echo "$time"
 	sum=$(echo $sum + $time | bc -l);
 done
 
@@ -116,6 +123,7 @@ sum=0
 for (( i=0; i<loop_variable; i++ ))
 do
 	time=`./ballAlg 3 3 3 2>&1`
+	echo "$time"
 	sum=$(echo $sum + $time | bc -l);
 done
 
@@ -131,6 +139,7 @@ sum=0
 for (( i=0; i<loop_variable; i++ ))
 do
 	time=`./ballAlg 5 4 3 2>&1`
+	echo "$time"
 	sum=$(echo $sum + $time | bc -l);
 done
 
@@ -146,6 +155,7 @@ sum=0
 for (( i=0; i<loop_variable; i++ ))
 do
 	time=`./ballAlg 2 6 8 2>&1`
+	echo "$time"
 	sum=$(echo $sum + $time | bc -l);
 done
 
