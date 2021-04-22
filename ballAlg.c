@@ -522,18 +522,16 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 	}
 }
 
-/* Prints the resulting tree to a file or stdout. */
+/* Prints the resulting tree to stdout. */
 void print_tree(node *tree) {
-    FILE *fd = fopen("pts.txt", "w");
-    fprintf(fd, "%d %ld\n", n_dims, 2 * np - 1);
+    fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
     for (long i = 0; i < 2 * np - 1; ++i) {
-        fprintf(fd, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
+        fprintf(stdout, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
         if (tree[i].left == -1)
-            print_point(pt_array[tree[i].center_id], n_dims, fd);
+            print_point(pt_array[tree[i].center_idx], n_dims, stdout);
         else
-            print_point(centers[tree[i].center_id], n_dims, fd);
+            print_point(centers[tree[i].center_idx], n_dims, stdout);
     }
-    fclose(fd);
 }
 
 /* Main: gets the initial points, allocates all memory and calls the routine that creates the tree (ballAlg);
