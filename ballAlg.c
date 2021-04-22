@@ -190,6 +190,75 @@ long n_levels;
 long id_last;
 long n_centers = 0;
 
+void ballAlg_tasks(long l, long r, long id, int lvl) {
+
+    if (r - l == 1) {
+        tree[id].center_id = idx[l];
+        tree[id].radius = 0;
+        tree[id].left = -1;
+        tree[id].right = -1;
+        return;
+    }
+
+    long a, b;
+	long c_id = -1;
+    // 2. Compute points a and b, furthest apart in the current set (approx)
+    furthest_apart(l, r, &a, &b);
+
+    // 3. Perform the orthogonal projection of all points onto line ab
+    for (int i = l; i < r; ++i)
+        proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
+
+    // 4. Compute the center, defined as the median point over all projections
+    int m1, m2 = -1;
+    double u, aux;
+    double abnorm = 0;
+    get_median(l, r, &m1, &m2);
+    #pragma omp critical
+    {
+    	c_id = n_centers++;
+    }
+
+	if ((r - l) % 2)
+        u = proj_scalar[m1];
+    else
+        u = (proj_scalar[m1] + proj_scalar[m2]) / 2;
+
+    for (int i = 0; i < n_dims; ++i) {
+        aux = (pt_array[b][i] - pt_array[a][i]);
+        centers[c_id][i] = u * aux;
+        abnorm += aux * aux;
+    }
+    for (int i = 0; i < n_dims; ++i)
+        centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
+
+    double max_r = 0, rad;
+    for (int i = l; i < r; ++i) {
+        rad = dist(centers[c_id], pt_array[idx[i]]);
+        if (rad > max_r)
+            max_r = rad;
+    }
+    tree[id].radius = sqrt(max_r);
+    tree[id].center_id = c_id;
+
+    if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
+    	#pragma omp critical
+    	{
+	        tree[id].left = id_last;
+	        tree[id].right = id_last + 1;
+	        id_last += 2;
+    	}
+    } else {
+        tree[id].left = 2 * id + 1;
+        tree[id].right = 2 * id + 2;
+    }
+
+    #pragma omp task
+    	ballAlg_tasks(l, l + (r - l) / 2, tree[id].left, lvl + 1);
+    #pragma omp task
+    	ballAlg_tasks(l + (r - l) / 2, r, tree[id].right, lvl + 1);
+}
+
 void ballAlg(long l, long r, long id, int lvl) {
 
     if (r - l == 1) {
@@ -255,7 +324,6 @@ void ballAlg(long l, long r, long id, int lvl) {
 
     ballAlg(l, l + (r - l) / 2, tree[id].left, lvl + 1);
     ballAlg(l + (r - l) / 2, r, tree[id].right, lvl + 1);
-
 }
 
 int max_parallel_level;
@@ -425,10 +493,18 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 			    }
 				
 				if (lvl == max_parallel_level) {
-					#pragma omp task
-					ballAlg(l, l + (r - l) / 2, tree[id].left, lvl+1);
-					#pragma omp task
-					ballAlg(l + (r - l) / 2, r, tree[id].right, lvl+1);
+					if (lvl == 0 && (threads & (threads - 1)) != 0) {
+						#pragma omp task
+						ballAlg_tasks(l, l + (r - l) / 2, tree[id].left, lvl+1);
+						#pragma omp task
+						ballAlg_tasks(l + (r - l) / 2, r, tree[id].right, lvl+1);
+					}
+					else {
+						#pragma omp task
+						ballAlg(l, l + (r - l) / 2, tree[id].left, lvl+1);
+						#pragma omp task
+						ballAlg(l + (r - l) / 2, r, tree[id].right, lvl+1);
+					}
 				}
 				else {
 					#pragma omp task
@@ -476,7 +552,7 @@ int main(int argc, char **argv) {
 		{
 			
 			threads = omp_get_num_threads();
-			if (threads == 1)
+			if (threads == 1 || (threads & (threads - 1)) != 0)
 				max_parallel_level = 0;
 			else
 				max_parallel_level = ceil(log(threads) / log(2)) - 1;
