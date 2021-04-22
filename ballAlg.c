@@ -215,7 +215,9 @@ void ballAlg(long l, long r, long id, int lvl) {
     double abnorm = 0;
     get_median(l, r, &m1, &m2);
     #pragma omp critical
+    {
     	c_id = n_centers++;
+    }
 
 	if ((r - l) % 2)
         u = proj_scalar[m1];
