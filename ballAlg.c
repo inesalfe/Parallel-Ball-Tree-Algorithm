@@ -254,7 +254,7 @@ int main(int argc, char **argv) {
     exec_time += omp_get_wtime();
     fprintf(stderr, "%.3lf\n", exec_time);
 
-    //print_tree(tree);
+    print_tree(tree);
 
     free(pt_array[0]);
     free(pt_array);
