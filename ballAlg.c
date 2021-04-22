@@ -434,8 +434,7 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 					#pragma omp task
 					ballAlg_par(l, l + (r - l) / 2, tree[id].left, lvl+1, threads/2);
 					#pragma omp task
-					ballAlg_par(l + (r - l) / 2, r, tree[id].right, lvl+1, threads/2);
-				}
+					ballAlg_par(l + (r - l) / 2, r, tree[id].right, lvl+1, threads-threads/2);				}
 			}
 		}
 	}
