@@ -13,7 +13,7 @@ typedef struct tree_node {
 } node;
 
 int n_dims; // Dimensions of the input points
-long np;    // Number of generated points
+long np; // Number of generated points
 /* Array of points: allocated at the beggining of the program;
 * Points are randomly generated at the start of the program and don't change as it runs.
 */
@@ -186,10 +186,11 @@ double *center1;
 double *abproj;
 
 long n_nodes; // Total number of tree nodes (in the end will equal 2 * np - 1)
-long n_levels;
-long id_last;
-long n_centers = 0;
+long n_levels; // Last level of the tree (the first level is 0)
+long id_last; // Node Id's of the last level
+long n_centers = 0; // Number of centers
 
+// This is the algorithm sequential version but with tasks in the recursive calls
 void ballAlg_tasks(long l, long r, long id, int lvl) {
 
     if (r - l == 1) {
@@ -259,6 +260,7 @@ void ballAlg_tasks(long l, long r, long id, int lvl) {
     	ballAlg_tasks(l + (r - l) / 2, r, tree[id].right, lvl + 1);
 }
 
+// Sequential version of the algorithm with no tasks in the recursive calls
 void ballAlg(long l, long r, long id, int lvl) {
 
     if (r - l == 1) {
@@ -326,20 +328,20 @@ void ballAlg(long l, long r, long id, int lvl) {
     ballAlg(l + (r - l) / 2, r, tree[id].right, lvl + 1);
 }
 
-int max_parallel_level;
+int max_parallel_level; // Max level until which paralelization inside the algorithm will be used
 
-/* Actual algorithm to compute the tree. */
+/* Parallel algoritm to be used in the first levels */
 void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 
-	long a = -1;
-	long b = -1;
-	int m1, m2 = -1;
-	double abnorm = 0.0;
+	long a = -1; // Global a
+	long b = -1; // Global b
+	int m1, m2 = -1; // Global median indexes
+	double abnorm = 0.0; // Global variable to be used in the reduction for
 
 	long idx0 = np;
-	double max_d = 0.0;
-	double max_r = 0.0;
-	long c_id = -1;
+	double max_d = 0.0; // Global max distance
+	double max_r = 0.0; // Global max radius
+	long c_id = -1; // Index for the centers vector
 	double u;
 
 	#pragma omp parallel num_threads(threads)
@@ -357,24 +359,24 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 
 		else {
 
-			long idx0_t = idx[l];
+			long idx0_t = idx[l]; // Minimum id inside each thread
 			#pragma omp for
 				for (int i = l + 1; i < r; ++i) {
 					if (idx[i] < idx0_t)
 						idx0_t = idx[i];
 				}
 
-			#pragma omp critical
+			#pragma omp critical // Calculation of the minimum of minimums
 			{
 				if (idx0_t < idx0)
-					idx0 = idx0_t;
+					idx0 = idx0_t; // Minimum id from all threads
 			}
 
-			#pragma omp barrier
+			#pragma omp barrier // Do not let any threads move foward before we complete the calculation of idx0, since it's going to be used next
 
 			double d;
-			double max_d_t = 0.0;
-			long a_t = -1;
+			double max_d_t = 0.0; // Maximum distance for each thread
+			long a_t = -1; // Corresponding index for each thread
 			#pragma omp for
 				for (int i = l; i < r; ++i) {
 					d = dist(pt_array[idx0], pt_array[idx[i]]);
@@ -384,19 +386,19 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 					}
 				}
 
-			#pragma omp critical
+			#pragma omp critical // The global maximum is the maximum of the threads maximums
 			{
 				if (max_d_t > max_d) {
 					max_d = max_d_t;
-					a = a_t;
+					a = a_t; // Also asign the global id
 				}
 			}
 
 			#pragma omp barrier
-			max_d = 0;
+			max_d = 0; // Reset the global distance
 
 			long b_t = -1;
-			max_d_t = 0;
+			max_d_t = 0; // Reset the private distances
 			#pragma omp for
 				for (int i = l; i < r; ++i) {
 					d = dist(pt_array[a], pt_array[idx[i]]);
@@ -431,7 +433,7 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 			#pragma omp single
 			{
 				get_median(l, r, &m1, &m2);
-				#pragma omp critical
+				#pragma omp critical // Increment the counter of centers
 				{
 					c_id = n_centers++;
 				}
@@ -446,7 +448,7 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 			}
 
 			double aux;
-			#pragma omp for reduction(+:abnorm)
+			#pragma omp for reduction(+:abnorm) // Using reduction since abnorm is a global variable
 			    for (int i = 0; i < n_dims; ++i) {
 			        aux = (pt_array[b][i] - pt_array[a][i]);
 			        centers[c_id][i] = u * aux;
@@ -458,7 +460,7 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 		        	centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
 
 			double rad;
-			double max_r_t = 0;
+			double max_r_t = 0; // Maximum radius inside each thread
 
 			#pragma omp for
 			for (int i = l; i < r; ++i) {
@@ -467,7 +469,7 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 					max_r_t = rad;
 			}
 
-			#pragma omp critical
+			#pragma omp critical // Get the maximum radius from the radius in each thread
 			{
 				if (max_r_t > max_r)
 					max_r = max_r_t;
@@ -478,6 +480,7 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 			{
 				tree[id].radius = sqrt(max_r);
 				tree[id].center_id = c_id;
+                // If the number of points is not a power of two and if we are in the last level of the tree, use variavle id_last to calculate the id's
 			    if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
 			        #pragma omp critical
 				    {
@@ -492,13 +495,16 @@ void ballAlg_par(long l, long r, long id, long lvl, int threads) {
 			        tree[id].right = 2*id+2;
 			    }
 				
+                // If we are in the last level with paralelization
 				if (lvl == max_parallel_level) {
+                    // Call sequential version with tasks if the number of threads is no a power of 2
 					if (lvl == 0 && (threads & (threads - 1)) != 0) {
 						#pragma omp task
 						ballAlg_tasks(l, l + (r - l) / 2, tree[id].left, lvl+1);
 						#pragma omp task
 						ballAlg_tasks(l + (r - l) / 2, r, tree[id].right, lvl+1);
 					}
+                    // Call sequential version with no tasks
 					else {
 						#pragma omp task
 						ballAlg(l, l + (r - l) / 2, tree[id].left, lvl+1);
@@ -540,6 +546,7 @@ int main(int argc, char **argv) {
 	
 	int threads;
 
+    // Nested parallelism on
 	omp_set_nested(1);
 
 	double exec_time;
@@ -552,6 +559,7 @@ int main(int argc, char **argv) {
 		{
 			
 			threads = omp_get_num_threads();
+            // If the number of threads is 1 or if it's not a power of two, there will only be one level of parallelism
 			if (threads == 1 || (threads & (threads - 1)) != 0)
 				max_parallel_level = 0;
 			else
@@ -561,8 +569,8 @@ int main(int argc, char **argv) {
 			pt_array = get_points(argc, argv, &n_dims, &np);
 
 		    n_nodes = 2 * np - 1;
-		    n_levels = ceil(log(np) / log(2));
-		    id_last = pow(2, n_levels) - 1;
+		    n_levels = ceil(log(np) / log(2)); // Number of levels in the tree minus one
+		    id_last = pow(2, n_levels) - 1; // First index of the last level
 
 			idx = (long *)malloc(sizeof(long) * np);
 
