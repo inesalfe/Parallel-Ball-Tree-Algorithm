@@ -528,9 +528,9 @@ void print_tree(node *tree) {
     for (long i = 0; i < 2 * np - 1; ++i) {
         fprintf(stdout, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
         if (tree[i].left == -1)
-            print_point(pt_array[tree[i].center_idx], n_dims, stdout);
+            print_point(pt_array[tree[i].center_id], n_dims, stdout);
         else
-            print_point(centers[tree[i].center_idx], n_dims, stdout);
+            print_point(centers[tree[i].center_id], n_dims, stdout);
     }
 }
 
