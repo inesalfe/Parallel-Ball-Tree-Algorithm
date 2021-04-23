@@ -16,7 +16,7 @@ do
 done
 
 avg=$(echo $sum / $loop_variable | bc -l);
-avg=`printf "%.3f" $avg`
+avg=`printf "%.1f" $avg`
 echo "Average time: $avg"
 
 # 2 8 1
@@ -32,7 +32,7 @@ do
 done
 
 avg=$(echo $sum / $loop_variable | bc -l);
-avg=`printf "%.3f" $avg`
+avg=`printf "%.1f" $avg`
 echo "Average time: $avg"
 
 # 20 1000000 0
@@ -48,7 +48,7 @@ do
 done
 
 avg=$(echo $sum / $loop_variable | bc -l);
-avg=`printf "%.3f" $avg`
+avg=`printf "%.1f" $avg`
 echo "Average time: $avg"
 
 # 3 5000000 0
@@ -64,7 +64,7 @@ do
 done
 
 avg=$(echo $sum / $loop_variable | bc -l);
-avg=`printf "%.3f" $avg`
+avg=`printf "%.1f" $avg`
 echo "Average time: $avg"
 
 # 4 10000000 0
@@ -80,7 +80,7 @@ do
 done
 
 avg=$(echo $sum / $loop_variable | bc -l);
-avg=`printf "%.3f" $avg`
+avg=`printf "%.1f" $avg`
 echo "Average time: $avg"
 
 # 3 20000000 0
@@ -96,7 +96,7 @@ do
 done
 
 avg=$(echo $sum / $loop_variable | bc -l);
-avg=`printf "%.3f" $avg`
+avg=`printf "%.1f" $avg`
 echo "Average time: $avg"
 
 # 4 20000000 0
@@ -112,7 +112,7 @@ do
 done
 
 avg=$(echo $sum / $loop_variable | bc -l);
-avg=`printf "%.3f" $avg`
+avg=`printf "%.1f" $avg`
 echo "Average time: $avg"
 
 # 3 3 3
@@ -128,7 +128,7 @@ do
 done
 
 avg=$(echo $sum / $loop_variable | bc -l);
-avg=`printf "%.3f" $avg`
+avg=`printf "%.1f" $avg`
 echo "Average time: $avg"
 
 # 5 4 3
@@ -144,7 +144,7 @@ do
 done
 
 avg=$(echo $sum / $loop_variable | bc -l);
-avg=`printf "%.3f" $avg`
+avg=`printf "%.1f" $avg`
 echo "Average time: $avg"
 
 # 2 6 8
@@ -160,5 +160,5 @@ do
 done
 
 avg=$(echo $sum / $loop_variable | bc -l);
-avg=`printf "%.3f" $avg`
+avg=`printf "%.1f" $avg`
 echo "Average time: $avg"

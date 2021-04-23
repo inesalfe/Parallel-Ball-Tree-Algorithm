@@ -591,7 +591,7 @@ int main(int argc, char **argv) {
 	ballAlg_par(0, np, 0, 0, threads);
 
 	exec_time += omp_get_wtime();
-	fprintf(stderr, "%.3lf\n", exec_time);
+	fprintf(stderr, "%.1lf\n", exec_time);
 
 	print_tree(tree);
 
