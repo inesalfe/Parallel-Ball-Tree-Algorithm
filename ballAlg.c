@@ -37,13 +37,11 @@ double **pt_array;
 * Has 2 * np - 1 points
 */
 node *tree;
-double *proj_scalar;
 /* vector with the sorted indices. 
 * All the computations are made in this vector:
 * sorting according to projection value, splitting in right/left ball
 * ...
 */
-long *idx;
 
 /* Function to print a point to a given file */
 void print_point(double *pt, int dim, FILE *fd) {
@@ -191,15 +189,26 @@ long n_nodes; // Total number of tree nodes (in the end will equal 2 * np - 1)
 long n_levels;
 long id_last;
 
-void ballAlg(long l, long r, long id, int lvl) {
+int id, p;
+void ballAlg(long l, long r, long tree_id, int lvl) {
 
-    printf("l: %ld, r: %ld, id: %ld, lvl: %d\n", l, r, id, lvl);
+    for (int i = 0; i < BLOCK_SIZE(id,p,np); ++i) {
+        printf("id: %d, pontos:", id);
+        print_point(pts[i].pt, n_dims, stdout);
+        printf("id: %d, i: %d\n", id, pts[i].i);
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    exit(0);
+
+    // printf("l: %ld, r: %ld, tree_id: %ld, lvl: %d\n", l, r, tree_id, lvl);
 
     if (r - l == 1) {
-        tree[id].center_idx = l;
-        tree[id].radius = 0;
-        tree[id].left = -1;
-        tree[id].right = -1;
+        tree[tree_id].center_idx = l;
+        tree[tree_id].radius = 0;
+        tree[tree_id].left = -1;
+        tree[tree_id].right = -1;
         return;
     }
 
@@ -238,20 +247,20 @@ void ballAlg(long l, long r, long id, int lvl) {
         if (rad > max_r)
             max_r = rad;
     }
-    tree[id].center_idx = c_id;
-    tree[id].radius = sqrt(max_r);
+    tree[tree_id].center_idx = c_id;
+    tree[tree_id].radius = sqrt(max_r);
 
     if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
-        tree[id].left = id_last;
-        tree[id].right = id_last + 1;
+        tree[tree_id].left = id_last;
+        tree[tree_id].right = id_last + 1;
         id_last += 2;
     } else {
-        tree[id].left = 2 * id + 1;
-        tree[id].right = 2 * id + 2;
+        tree[tree_id].left = 2 * tree_id + 1;
+        tree[tree_id].right = 2 * tree_id + 2;
     }
 
-    ballAlg(l, l + (r - l) / 2, tree[id].left, lvl + 1);
-    ballAlg(l + (r - l) / 2, r, tree[id].right, lvl + 1);
+    ballAlg(l, l + (r - l) / 2, tree[tree_id].left, lvl + 1);
+    ballAlg(l + (r - l) / 2, r, tree[tree_id].right, lvl + 1);
 }
 
 void print_tree(node *tree) {
@@ -267,7 +276,6 @@ void print_tree(node *tree) {
 
 int main(int argc, char **argv) {
 
-    int id, p, index;
     double elapsed_time;
 
     MPI_Init (&argc, &argv);
@@ -278,77 +286,41 @@ int main(int argc, char **argv) {
     MPI_Comm_rank (MPI_COMM_WORLD, &id);
     MPI_Comm_size (MPI_COMM_WORLD, &p);
 
-    if (argc != 2) {
+    if (argc != 4) {
         if (!id)
             printf ("Command line: %s <m>\n", argv[0]);
         MPI_Finalize();
         exit (1);
     }
 
-    if (!id) {
+    pt_array = get_points(argc, argv, &n_dims, &np);
 
-        pt_array = get_points(argc, argv, &n_dims, &np);
+    pts = (pt *)malloc(sizeof(pt) * ceil(np/p));
+    
+    n_nodes = 2 * np - 1;
+    n_levels = ceil(log(np) / log(2));
+    id_last = pow(2, n_levels) - 1;
 
-        pts = (pt *)malloc(sizeof(pt) * np);
-        
-        n_nodes = 2 * np - 1;
-        n_levels = ceil(log(np) / log(2));
-        id_last = pow(2, n_levels) - 1;
-
-        for (int i = 0; i < np; ++i) {
-            pts[i].pt = pt_array[i];
-            pts[i].i = i;
-        }
-
-        tree = (node *)malloc((2 * np - 1) * sizeof(node));
-        double *center_aux = (double *)malloc((np - 1) * n_dims * sizeof(double));
-        centers = (double **)malloc((np - 1) * sizeof(double *));
-        for (int i = 0; i < np - 1; ++i)
-            centers[i] = &center_aux[i * n_dims];
+    for (int i = 0; i < BLOCK_SIZE(id,p,np); ++i) {
+        pts[i].pt = pt_array[BLOCK_LOW(id,p,np)+i];
+        pts[i].i = BLOCK_LOW(id,p,np)+i;
     }
 
-    const int nitems = 3;
-    int blocklengths[3] = {1, 1, n_dims};
-    MPI_Datatype types[3] = {MPI_INT, MPI_DOUBLE, MPI_DOUBLE};
-    MPI_Datatype mpi_pt_struct;
-    MPI_Aint offsets[3];
-
-    offsets[0] = offsetof(pt, i);
-    offsets[1] = offsetof(pt, proj);
-    offsets[2] = offsetof(pt, pt);
-
-    MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_pt_struct);
-    MPI_Type_commit(&mpi_pt_struct);
-
-    int * sendcounts;
-    int * displs;
-    sendcounts = (int *) malloc(p*sizeof(int));
-    displs = (int *) malloc(p*sizeof(int));
-    for (int i = 0; i < p; i++) {
-        sendcounts[i] = BLOCK_SIZE(i,p,np);
-        displs[i] = BLOCK_LOW(i,p,np);
-    }
-
-    pt *pts_proc;
-    pts_proc = (pt *)malloc(sizeof(pt) * ceil(np/p));
-
-    MPI_Scatterv(pts, sendcounts, displs, mpi_pt_struct, pts_proc, sendcounts[id], mpi_pt_struct, 0, MPI_COMM_WORLD);
-
-    for (int i = 0; i < sendcounts[id]; i++)
-        printf("%d %d %f %f\n", id, pts_proc->i, pts_proc->proj, pts_proc->pt[0]);
+    tree = (node *)malloc((2 * np - 1) * sizeof(node));
+    double *center_aux = (double *)malloc((np - 1) * n_dims * sizeof(double));
+    centers = (double **)malloc((np - 1) * sizeof(double *));
+    for (int i = 0; i < np - 1; ++i)
+        centers[i] = &center_aux[i * n_dims];
 
     elapsed_time += MPI_Wtime();
     if (!id) {
         printf ("Total elapsed time: %10.6f\n", elapsed_time);
     }
 
-    MPI_Type_free(&mpi_pt_struct);
+    ballAlg(0, np, 0, 0);
+
     MPI_Finalize ();
 
-    exit(0);
-
-    ballAlg(0, np, 0, 0);
-        
     // fprintf(stderr, "%.1lf\n", elapsed_time);
 
     print_tree(tree);
