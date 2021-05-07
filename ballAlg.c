@@ -1,13 +1,16 @@
 #include <math.h>
-#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <mpi.h>
 
 #include "gen_points.h"
-// #define DEBUG
+
+#define BLOCK_LOW(id,p,np) ((id)*(np)/(p))
+#define BLOCK_HIGH(id,p,np) (BLOCK_LOW((id)+1,p,np)-1)
+#define BLOCK_SIZE(id,p,np) (BLOCK_HIGH(id,p,np)-BLOCK_LOW(id,p,np)+1)
 
 typedef struct tree_node {
-    double *center;
+    int center_idx;
     double radius;
     long left;
     long right;
@@ -18,6 +21,10 @@ long np;    // Number of generated points
 /* Array of points: allocated at the beggining of the program;
 * Points are randomly generated at the start of the program and don't change as it runs
 */
+
+double **centers;
+long n_center = 0;
+
 double **pt_array;
 /* Struct that saves all tree information, for later printing;
 * Has 2 * np - 1 points
@@ -193,27 +200,20 @@ long n_levels;
 long id_last;
 
 void ballAlg(long l, long r, long id, int lvl) {
-    
-#ifdef DEBUG
-    printf("%ld %ld\n", l, r);
-#endif
 
     if (r - l == 1) {
-        for (int i = 0; i < n_dims; ++i)
-            tree[id].center[i] = pt_array[idx[l]][i];
+        tree[id].center_idx = l;
         tree[id].radius = 0;
         tree[id].left = -1;
         tree[id].right = -1;
         return;
     }
 
+    long c_id = n_center++;
+
     long a, b;
     // 2. Compute points a and b, furthest apart in the current set (approx)
     furthest_apart(l, r, &a, &b);
-
-#ifdef DEBUG
-    printf("a: %ld, b: %ld\n", a, b);
-#endif
 
     // 3. Perform the orthogonal projection of all points onto line ab
     for (int i = l; i < r; ++i)
@@ -223,37 +223,26 @@ void ballAlg(long l, long r, long id, int lvl) {
     int m1, m2 = -1;
     get_median(l, r, &m1, &m2);
 
-#ifdef DEBUG
-    printf("Median index 1: %d, Median index 2: %d\nMedian point 1: ", m1, m2);
-    print_point(pt_array[m1], n_dims, stdout);
-#endif
-
-#ifdef DEBUG
-    printf("\tidx: ");
-    for (int i = 0; i < np; ++i)
-        printf("%ld ", idx[i]);
-    printf("\n");
-#endif
-
     if ((r - l) % 2) {
-        orth_projv2(pt_array[a], pt_array[b], m1, tree[id].center);
+        orth_projv2(pt_array[a], pt_array[b], m1, centers[c_id]);
     } else {
         double abnorm = 0.0, aux, u = (proj_scalar[m1] + proj_scalar[m2]) / 2;
         for (int i = 0; i < n_dims; ++i) {
             aux = (pt_array[b][i] - pt_array[a][i]);
-            tree[id].center[i] = u * aux;
+            centers[c_id][i] = u * aux;
             abnorm += aux * aux;
         }
         for (int i = 0; i < n_dims; ++i)
-            tree[id].center[i] = tree[id].center[i] / abnorm + pt_array[a][i];
+            centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
     }
 
     double max_r = 0, rad;
     for (int i = l; i < r; ++i) {
-        rad = dist(tree[id].center, pt_array[idx[i]]);
+        rad = dist(centers[c_id], pt_array[idx[i]]);
         if (rad > max_r)
             max_r = rad;
     }
+    tree[id].center_idx = c_id;
     tree[id].radius = sqrt(max_r);
 
     if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
@@ -282,8 +271,23 @@ void print_tree(node *tree) {
 
 int main(int argc, char **argv) {
 
-    double exec_time;
-    exec_time = -omp_get_wtime();
+    int id, p, index;
+    double elapsed_time;
+
+    MPI_Init (&argc, &argv);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    elapsed_time = -MPI_Wtime();
+
+    MPI_Comm_rank (MPI_COMM_WORLD, &id);
+    MPI_Comm_size (MPI_COMM_WORLD, &p);
+
+    if (argc != 2) {
+        if (!id)
+            printf ("Command line: %s <m>\n", argv[0]);
+        MPI_Finalize();
+        exit (1);
+    }
 
     // 1. Get input sample points
     pt_array = get_points(argc, argv, &n_dims, &np);
@@ -292,36 +296,55 @@ int main(int argc, char **argv) {
     n_levels = ceil(log(np) / log(2));
     id_last = pow(2, n_levels) - 1;
 
-#ifdef DEBUG
-    FILE *fd = fopen("points.txt", "w");
-    for (int i = 0; i < np; ++i) {
-        print_point(pt_array[i], n_dims, stdout);
-        print_point(pt_array[i], n_dims, fd);
+    if (!id) {
+
+        idx = (long *)malloc(sizeof(long) * np);
+        for (int i = 0; i < np; ++i)
+            idx[i] = i;
+
+        proj_scalar = (double *)malloc(np * sizeof(double));
+
+        tree = (node *)malloc(n_nodes * sizeof(node));
+        for (int i = 0; i < n_nodes; ++i)
+            tree[i].center = (double *)malloc(n_dims * sizeof(double));
     }
-    fclose(fd);
-#endif
 
-    idx = (long *)malloc(sizeof(long) * np);
-    for (int i = 0; i < np; ++i)
-        idx[i] = i;
+    int * sendcounts;
+    int * displs;
+    sendcounts = (int *) malloc(p*sizeof(int));
+    displs = (int *) malloc(p*sizeof(int));
+    for (int i = 0; i < p; i++) {
+        sendcounts[i] = BLOCK_SIZE(i,p,np);
+        displs[i] = BLOCK_LOW(i,p,np);
+    }
 
-    proj_scalar = (double *)malloc(np * sizeof(double));
+    int * idx_proc;
+    idx_proc = (int *) malloc(ceil(np/p)*sizeof(int));
 
-    tree = (node *)malloc(n_nodes * sizeof(node));
-    for (int i = 0; i < n_nodes; ++i)
-        tree[i].center = (double *)malloc(n_dims * sizeof(double));
+    MPI_Scatterv(idx, sendcounts, displs, mpi_pt_struct, idx_proc, sendcounts[id], mpi_pt_struct, 0, MPI_COMM_WORLD);
+
+    for (int i = 0; i < sendcounts[id]; i++)
+        printf("%d %d\n", id, idx_proc[i]);
+
+    elapsed_time += MPI_Wtime();
+    if (!id) {
+        printf ("Total elapsed time: %10.6f\n", elapsed_time);
+    }
+
+    MPI_Type_free(&mpi_pt_struct);
+    MPI_Finalize ();
+
+    exit(0);
 
     ballAlg(0, np, 0, 0);
 
-    exec_time += omp_get_wtime();
-    fprintf(stderr, "%.3lf\n", exec_time);
+    // exec_time += omp_get_wtime();
+    // fprintf(stderr, "%.3lf\n", exec_time);
 
     print_tree(tree);
 
-    for (int i = 0; i < n_nodes; ++i)
-        free(tree[i].center);
-    free(tree);
-
+    free(centers[0]);
+    free(centers);
     free(proj_scalar);
     free(idx);
     free(pt_array[0]);
