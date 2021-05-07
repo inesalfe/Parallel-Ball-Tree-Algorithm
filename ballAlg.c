@@ -5,6 +5,11 @@
 
 #include "gen_points.h"
 
+// #define BLOCK_LOW(id,p,np) ((id)*(np)/(p))
+// #define BLOCK_HIGH(id,p,np) (BLOCK_LOW((id)+1,p,np) - 1)
+// #define BLOCK_SIZE(id,p,np) \ (BLOCK_HIGH(id,p,np) - BLOCK_LOW(id,p,np) + 1)
+// #define BLOCK_OWNER(index,p,np) \ (((p)*((index)+1)-1)/(np))
+
 typedef struct tree_node {
     int center_idx;
     double radius;
@@ -252,6 +257,8 @@ void print_tree(node *tree) {
 }
 
 int main(int argc, char **argv) {
+
+    int id, p, index;
 
     double exec_time;
     exec_time = -omp_get_wtime();
