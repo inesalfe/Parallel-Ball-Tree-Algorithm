@@ -1,14 +1,13 @@
 #include <math.h>
-#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <mpi.h>
 
 #include "gen_points.h"
 
-// #define BLOCK_LOW(id,p,np) ((id)*(np)/(p))
-// #define BLOCK_HIGH(id,p,np) (BLOCK_LOW((id)+1,p,np) - 1)
-// #define BLOCK_SIZE(id,p,np) \ (BLOCK_HIGH(id,p,np) - BLOCK_LOW(id,p,np) + 1)
-// #define BLOCK_OWNER(index,p,np) \ (((p)*((index)+1)-1)/(np))
+#define BLOCK_LOW(id,p,np) ((id)*(np)/(p))
+#define BLOCK_HIGH(id,p,np) (BLOCK_LOW((id)+1,p,np)-1)
+#define BLOCK_SIZE(id,p,np) (BLOCK_HIGH(id,p,np)-BLOCK_LOW(id,p,np)+1)
 
 typedef struct tree_node {
     int center_idx;
@@ -26,6 +25,7 @@ typedef struct pt_struct {
 pt *pts;
 
 double **centers;
+long n_center = 0;
 
 int n_dims; // Dimensions of the input points
 long np;    // Number of generated points
@@ -187,20 +187,20 @@ void get_median(int l, int h, int *median_1, int *median_2) {
 
 double *abproj;
 
-long n_nodes = 0; // Total number of tree nodes (in the end will equal 2 * np - 1)
-long n_center = 0;
+long n_nodes; // Total number of tree nodes (in the end will equal 2 * np - 1)
+long n_levels;
+long id_last;
 
-long ballAlg(long l, long r) {
+void ballAlg(long l, long r, long id, int lvl) {
 
-    ++n_nodes;
-    long id = n_nodes - 1;
+    printf("l: %ld, r: %ld, id: %ld, lvl: %d\n", l, r, id, lvl);
 
     if (r - l == 1) {
         tree[id].center_idx = l;
         tree[id].radius = 0;
         tree[id].left = -1;
         tree[id].right = -1;
-        return id;
+        return;
     }
 
     long c_id = n_center++;
@@ -208,6 +208,7 @@ long ballAlg(long l, long r) {
     long a, b;
     // 2. Compute points a and b, furthest apart in the current set (approx)
     furthest_apart(l, r, &a, &b);
+    printf("a: %ld, b: %ld\n", a, b);
 
     // 3. Perform the orthogonal projection of all points onto line ab
     for (int i = l; i < r; ++i)
@@ -216,6 +217,7 @@ long ballAlg(long l, long r) {
     // 4. Compute the center, defined as the median point over all projections
     int m1, m2 = -1;
     get_median(l, r, &m1, &m2);
+    printf("m1: %d, m2: %d\n", m1, m2);
 
     if ((r - l) % 2) {
         orth_projv2(pt_array[a], pt_array[b], m1, centers[c_id]);
@@ -239,10 +241,17 @@ long ballAlg(long l, long r) {
     tree[id].center_idx = c_id;
     tree[id].radius = sqrt(max_r);
 
-    tree[id].left = ballAlg(l, l + (r - l) / 2);
-    tree[id].right = ballAlg(l + (r - l) / 2, r);
+    if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
+        tree[id].left = id_last;
+        tree[id].right = id_last + 1;
+        id_last += 2;
+    } else {
+        tree[id].left = 2 * id + 1;
+        tree[id].right = 2 * id + 2;
+    }
 
-    return id;
+    ballAlg(l, l + (r - l) / 2, tree[id].left, lvl + 1);
+    ballAlg(l + (r - l) / 2, r, tree[id].right, lvl + 1);
 }
 
 void print_tree(node *tree) {
@@ -259,36 +268,90 @@ void print_tree(node *tree) {
 int main(int argc, char **argv) {
 
     int id, p, index;
+    double elapsed_time;
 
-    double exec_time;
-    exec_time = -omp_get_wtime();
+    MPI_Init (&argc, &argv);
 
-    // 1. Get input sample points
-    pt_array = get_points(argc, argv, &n_dims, &np);
+    MPI_Barrier(MPI_COMM_WORLD);
+    elapsed_time = -MPI_Wtime();
 
-    pts = (pt *)malloc(sizeof(pt) * np);
+    MPI_Comm_rank (MPI_COMM_WORLD, &id);
+    MPI_Comm_size (MPI_COMM_WORLD, &p);
 
-    // idx = (long *)malloc(sizeof(long) * np);
-    for (int i = 0; i < np; ++i) {
-        pts[i].pt = pt_array[i];
-        pts[i].i = i;
-        // idx[i] = i;
+    if (argc != 2) {
+        if (!id)
+            printf ("Command line: %s <m>\n", argv[0]);
+        MPI_Finalize();
+        exit (1);
     }
 
-    // proj_scalar = (double *)malloc(np * sizeof(double));
+    if (!id) {
 
-    tree = (node *)malloc((2 * np - 1) * sizeof(node));
-    double *center_aux = (double *)malloc((np - 1) * n_dims * sizeof(double));
-    centers = (double **)malloc((np - 1) * sizeof(double *));
-    for (int i = 0; i < np - 1; ++i)
-        centers[i] = &center_aux[i * n_dims];
+        pt_array = get_points(argc, argv, &n_dims, &np);
 
-    ballAlg(0, np);
+        pts = (pt *)malloc(sizeof(pt) * np);
+        
+        n_nodes = 2 * np - 1;
+        n_levels = ceil(log(np) / log(2));
+        id_last = pow(2, n_levels) - 1;
 
-    exec_time += omp_get_wtime();
-    fprintf(stderr, "%.1lf\n", exec_time);
+        for (int i = 0; i < np; ++i) {
+            pts[i].pt = pt_array[i];
+            pts[i].i = i;
+        }
 
-    // print_tree(tree);
+        tree = (node *)malloc((2 * np - 1) * sizeof(node));
+        double *center_aux = (double *)malloc((np - 1) * n_dims * sizeof(double));
+        centers = (double **)malloc((np - 1) * sizeof(double *));
+        for (int i = 0; i < np - 1; ++i)
+            centers[i] = &center_aux[i * n_dims];
+    }
+
+    const int nitems = 3;
+    int blocklengths[3] = {1, 1, n_dims};
+    MPI_Datatype types[3] = {MPI_INT, MPI_DOUBLE, MPI_DOUBLE};
+    MPI_Datatype mpi_pt_struct;
+    MPI_Aint offsets[3];
+
+    offsets[0] = offsetof(pt, i);
+    offsets[1] = offsetof(pt, proj);
+    offsets[2] = offsetof(pt, pt);
+
+    MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_pt_struct);
+    MPI_Type_commit(&mpi_pt_struct);
+
+    int * sendcounts;
+    int * displs;
+    sendcounts = (int *) malloc(p*sizeof(int));
+    displs = (int *) malloc(p*sizeof(int));
+    for (int i = 0; i < p; i++) {
+        sendcounts[i] = BLOCK_SIZE(i,p,np);
+        displs[i] = BLOCK_LOW(i,p,np);
+    }
+
+    pt *pts_proc;
+    pts_proc = (pt *)malloc(sizeof(pt) * ceil(np/p));
+
+    MPI_Scatterv(pts, sendcounts, displs, mpi_pt_struct, pts_proc, sendcounts[id], mpi_pt_struct, 0, MPI_COMM_WORLD);
+
+    for (int i = 0; i < sendcounts[id]; i++)
+        printf("%d %d %f %f\n", id, pts_proc->i, pts_proc->proj, pts_proc->pt[0]);
+
+    elapsed_time += MPI_Wtime();
+    if (!id) {
+        printf ("Total elapsed time: %10.6f\n", elapsed_time);
+    }
+
+    MPI_Type_free(&mpi_pt_struct);
+    MPI_Finalize ();
+
+    exit(0);
+
+    ballAlg(0, np, 0, 0);
+        
+    // fprintf(stderr, "%.1lf\n", elapsed_time);
+
+    print_tree(tree);
 
     free(pt_array[0]);
     free(pt_array);
