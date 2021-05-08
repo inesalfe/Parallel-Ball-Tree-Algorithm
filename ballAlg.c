@@ -200,30 +200,57 @@ void ballAlg(long l, long r, long tree_id, int lvl) {
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    exit(0);
-
     // printf("l: %ld, r: %ld, tree_id: %ld, lvl: %d\n", l, r, tree_id, lvl);
 
-    if (r - l == 1) {
-        tree[tree_id].center_idx = l;
-        tree[tree_id].radius = 0;
-        tree[tree_id].left = -1;
-        tree[tree_id].right = -1;
-        return;
+    if (!id) {
+
+        if (r - l == 1) {
+            tree[tree_id].center_idx = l;
+            tree[tree_id].radius = 0;
+            tree[tree_id].left = -1;
+            tree[tree_id].right = -1;
+            return;
+        }
+
+        long c_id = n_center++;
     }
 
-    long c_id = n_center++;
-
     long a, b;
-    // 2. Compute points a and b, furthest apart in the current set (approx)
-    furthest_apart(l, r, &a, &b);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    double max_d = 0.0;
+    double d;
+    long idx0 = pts[l].i;
+    for (int i = l + 1; i < r; ++i) {
+        if (pts[l].i < idx0)
+            idx0 = l;
+    }
+    for (int i = l; i < r; ++i) {
+        d = dist(pts[idx0].pt, pts[i].pt);
+        if (d > max_d) {
+            max_d = d;
+            *a_idx = i;
+        }
+    }
+    max_d = 0;
+    for (int i = l; i < r; ++i) {
+        d = dist(pts[*a_idx].pt, pts[i].pt);
+        if (d > max_d) {
+            max_d = d;
+            *b_idx = i;
+        }
+    }
+    if (pts[*a_idx].pt[0] > pts[*b_idx].pt[0])
+        swap(a_idx, b_idx);
+    *a_idx = pts[*a_idx].i;
+    *b_idx = pts[*b_idx].i;
+    
     printf("a: %ld, b: %ld\n", a, b);
 
-    // 3. Perform the orthogonal projection of all points onto line ab
     for (int i = l; i < r; ++i)
         pts[i].proj = orth_projv1(pt_array[a], pt_array[b], pts[i].pt);
 
-    // 4. Compute the center, defined as the median point over all projections
     int m1, m2 = -1;
     get_median(l, r, &m1, &m2);
     printf("m1: %d, m2: %d\n", m1, m2);
@@ -247,20 +274,26 @@ void ballAlg(long l, long r, long tree_id, int lvl) {
         if (rad > max_r)
             max_r = rad;
     }
-    tree[tree_id].center_idx = c_id;
-    tree[tree_id].radius = sqrt(max_r);
 
-    if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
-        tree[tree_id].left = id_last;
-        tree[tree_id].right = id_last + 1;
-        id_last += 2;
-    } else {
-        tree[tree_id].left = 2 * tree_id + 1;
-        tree[tree_id].right = 2 * tree_id + 2;
+    if (!id) {
+
+        tree[tree_id].center_idx = c_id;
+        tree[tree_id].radius = sqrt(max_r);
+
+        if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
+            tree[tree_id].left = id_last;
+            tree[tree_id].right = id_last + 1;
+            id_last += 2;
+        } else {
+            tree[tree_id].left = 2 * tree_id + 1;
+            tree[tree_id].right = 2 * tree_id + 2;
+        }
+
+        ballAlg(l, l + (r - l) / 2, tree[tree_id].left, lvl + 1);
+        ballAlg(l + (r - l) / 2, r, tree[tree_id].right, lvl + 1);
+    
     }
 
-    ballAlg(l, l + (r - l) / 2, tree[tree_id].left, lvl + 1);
-    ballAlg(l + (r - l) / 2, r, tree[tree_id].right, lvl + 1);
 }
 
 void print_tree(node *tree) {
