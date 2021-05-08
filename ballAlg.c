@@ -75,28 +75,26 @@ void furthest_apart(int l, int r, long *a_idx, long *b_idx) {
     double d;
     long idx0 = pts[l].i;
     for (int i = l + 1; i < r; ++i) {
-        if (pts[l].i < idx0)
-            idx0 = l;
+        if (pts[i].i < idx0)
+            idx0 = pts[i].i;
     }
     for (int i = l; i < r; ++i) {
-        d = dist(pts[idx0].pt, pts[i].pt);
+        d = dist(pt_array[idx0], pts[i].pt);
         if (d > max_d) {
             max_d = d;
-            *a_idx = i;
+            *a_idx = pts[i].i;
         }
     }
     max_d = 0;
     for (int i = l; i < r; ++i) {
-        d = dist(pts[*a_idx].pt, pts[i].pt);
+        d = dist(pt_array[*a_idx], pts[i].pt);
         if (d > max_d) {
             max_d = d;
-            *b_idx = i;
+            *b_idx = pts[i].i;
         }
     }
-    if (pts[*a_idx].pt[0] > pts[*b_idx].pt[0])
+    if (pt_array[*a_idx][0] > pt_array[*b_idx][0])
         swap(a_idx, b_idx);
-    *a_idx = pts[*a_idx].i;
-    *b_idx = pts[*b_idx].i;
 }
 
 double orth_projv1(double *a, double *b, double *p) {
@@ -173,13 +171,10 @@ void get_median(int l, int h, int *median_1, int *median_2) {
         *median_1 = get_kth_element((h - l - 1) / 2, l, h);
     else {
         *median_1 = get_kth_element((h - l) / 2 - 1, l, h);
-        *median_2 = *median_1;
-        for (int i = l + (h - l) / 2; i < h; ++i) {
-            if (is_seq(*median_2, i)) {
+        *median_2 = l + (h - l) / 2;
+        for (int i = l + (h - l) / 2 + 1; i < h; ++i)
+            if (is_seq(i, *median_2))
                 *median_2 = i;
-            }
-        }
-        // *median_2 = get_kth_element(0, l + (h - l) / 2, h);
     }
 }
 
@@ -223,28 +218,26 @@ void ballAlg(long l, long r, long tree_id, int lvl) {
     double d;
     long idx0 = pts[l].i;
     for (int i = l + 1; i < r; ++i) {
-        if (pts[l].i < idx0)
-            idx0 = l;
+        if (pts[i].i < idx0)
+            idx0 = pts[i].i;
     }
     for (int i = l; i < r; ++i) {
-        d = dist(pts[idx0].pt, pts[i].pt);
+        d = dist(pt_array[idx0], pts[i].pt);
         if (d > max_d) {
             max_d = d;
-            *a_idx = i;
+            *a_idx = pts[i].i;
         }
     }
     max_d = 0;
     for (int i = l; i < r; ++i) {
-        d = dist(pts[*a_idx].pt, pts[i].pt);
+        d = dist(pt_array[*a_idx], pts[i].pt);
         if (d > max_d) {
             max_d = d;
-            *b_idx = i;
+            *b_idx = pts[i].i;
         }
     }
-    if (pts[*a_idx].pt[0] > pts[*b_idx].pt[0])
+    if (pt_array[*a_idx][0] > pt_array[*b_idx][0])
         swap(a_idx, b_idx);
-    *a_idx = pts[*a_idx].i;
-    *b_idx = pts[*b_idx].i;
     
     printf("a: %ld, b: %ld\n", a, b);
 
@@ -255,18 +248,19 @@ void ballAlg(long l, long r, long tree_id, int lvl) {
     get_median(l, r, &m1, &m2);
     printf("m1: %d, m2: %d\n", m1, m2);
 
-    if ((r - l) % 2) {
-        orth_projv2(pt_array[a], pt_array[b], m1, centers[c_id]);
-    } else {
-        double abnorm = 0.0, aux, u = (pts[m1].proj + pts[m2].proj) / 2;
-        for (int i = 0; i < n_dims; ++i) {
-            aux = (pt_array[b][i] - pt_array[a][i]);
-            centers[c_id][i] = u * aux;
-            abnorm += aux * aux;
-        }
-        for (int i = 0; i < n_dims; ++i)
-            centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
+    double abnorm = 0.0, aux, u;
+    if ((r - l) % 2)
+        u = pts[m1].proj;
+    else
+        u = (pts[m1].proj + pts[m2].proj) / 2;
+
+    for (int i = 0; i < n_dims; ++i) {
+        aux = (pt_array[b][i] - pt_array[a][i]);
+        centers[c_id][i] = u * aux;
+        abnorm += aux * aux;
     }
+    for (int i = 0; i < n_dims; ++i)
+        centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
 
     double max_r = 0, rad;
     for (int i = l; i < r; ++i) {
@@ -365,7 +359,6 @@ int main(int argc, char **argv) {
     free(centers);
 
     free(tree);
-
     free(pts);
 
     exit(0);
