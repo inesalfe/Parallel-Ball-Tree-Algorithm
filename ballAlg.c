@@ -333,8 +333,6 @@ int main(int argc, char **argv) {
 
     free(tree);
 
-    // free(proj_scalar);
-    // free(idx);
     free(pts);
 
     exit(0);
