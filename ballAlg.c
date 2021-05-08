@@ -32,13 +32,6 @@ double **pt_array;
 * Has 2 * np - 1 points
 */
 node *tree;
-double *proj_scalar;
-/* vector with the sorted indices. 
-* All the computations are made in this vector:
-* sorting according to projection value, splitting in right/left ball
-* ...
-*/
-long *idx;
 
 /* Function to print a point to a given file */
 void print_point(double *pt, int dim, FILE *fd) {
@@ -72,28 +65,26 @@ void furthest_apart(int l, int r, long *a_idx, long *b_idx) {
     double d;
     long idx0 = pts[l].i;
     for (int i = l + 1; i < r; ++i) {
-        if (pts[l].i < idx0)
-            idx0 = l;
+        if (pts[i].i < idx0)
+            idx0 = pts[i].i;
     }
     for (int i = l; i < r; ++i) {
-        d = dist(pts[idx0].pt, pts[i].pt);
+        d = dist(pt_array[idx0], pts[i].pt);
         if (d > max_d) {
             max_d = d;
-            *a_idx = i;
+            *a_idx = pts[i].i;
         }
     }
     max_d = 0;
     for (int i = l; i < r; ++i) {
-        d = dist(pts[*a_idx].pt, pts[i].pt);
+        d = dist(pt_array[*a_idx], pts[i].pt);
         if (d > max_d) {
             max_d = d;
-            *b_idx = i;
+            *b_idx = pts[i].i;
         }
     }
-    if (pts[*a_idx].pt[0] > pts[*b_idx].pt[0])
+    if (pt_array[*a_idx][0] > pt_array[*b_idx][0])
         swap(a_idx, b_idx);
-    *a_idx = pts[*a_idx].i;
-    *b_idx = pts[*b_idx].i;
 }
 
 double orth_projv1(double *a, double *b, double *p) {
@@ -170,13 +161,10 @@ void get_median(int l, int h, int *median_1, int *median_2) {
         *median_1 = get_kth_element((h - l - 1) / 2, l, h);
     else {
         *median_1 = get_kth_element((h - l) / 2 - 1, l, h);
-        *median_2 = *median_1;
-        for (int i = l + (h - l) / 2; i < h; ++i) {
-            if (is_seq(*median_2, i)) {
+        *median_2 = l + (h - l) / 2;
+        for (int i = l + (h - l) / 2 + 1; i < h; ++i)
+            if (is_seq(i, *median_2))
                 *median_2 = i;
-            }
-        }
-        // *median_2 = get_kth_element(0, l + (h - l) / 2, h);
     }
 }
 
@@ -212,18 +200,19 @@ long ballAlg(long l, long r) {
     int m1, m2 = -1;
     get_median(l, r, &m1, &m2);
 
-    if ((r - l) % 2) {
-        orth_projv2(pt_array[a], pt_array[b], m1, centers[c_id]);
-    } else {
-        double abnorm = 0.0, aux, u = (pts[m1].proj + pts[m2].proj) / 2;
-        for (int i = 0; i < n_dims; ++i) {
-            aux = (pt_array[b][i] - pt_array[a][i]);
-            centers[c_id][i] = u * aux;
-            abnorm += aux * aux;
-        }
-        for (int i = 0; i < n_dims; ++i)
-            centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
+    double abnorm = 0.0, aux, u;
+    if ((r - l) % 2)
+        u = pts[m1].proj;
+    else
+        u = (pts[m1].proj + pts[m2].proj) / 2;
+
+    for (int i = 0; i < n_dims; ++i) {
+        aux = (pt_array[b][i] - pt_array[a][i]);
+        centers[c_id][i] = u * aux;
+        abnorm += aux * aux;
     }
+    for (int i = 0; i < n_dims; ++i)
+        centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
 
     double max_r = 0, rad;
     for (int i = l; i < r; ++i) {
@@ -261,14 +250,10 @@ int main(int argc, char **argv) {
 
     pts = (pt *)malloc(sizeof(pt) * np);
 
-    // idx = (long *)malloc(sizeof(long) * np);
     for (int i = 0; i < np; ++i) {
         pts[i].pt = pt_array[i];
         pts[i].i = i;
-        // idx[i] = i;
     }
-
-    // proj_scalar = (double *)malloc(np * sizeof(double));
 
     tree = (node *)malloc((2 * np - 1) * sizeof(node));
     double *center_aux = (double *)malloc((np - 1) * n_dims * sizeof(double));
@@ -281,7 +266,7 @@ int main(int argc, char **argv) {
     exec_time += omp_get_wtime();
     fprintf(stderr, "%.1lf\n", exec_time);
 
-    // print_tree(tree);
+    print_tree(tree);
 
     free(pt_array[0]);
     free(pt_array);
@@ -290,9 +275,6 @@ int main(int argc, char **argv) {
     free(centers);
 
     free(tree);
-
-    // free(proj_scalar);
-    // free(idx);
     free(pts);
 
     exit(0);
