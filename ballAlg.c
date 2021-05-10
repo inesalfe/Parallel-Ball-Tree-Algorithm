@@ -45,6 +45,92 @@ int * block_size; // Array of the number of elements in each processor
 
 MPI_Datatype mpi_data_struct; // MPI struct equivalent to local_data struct
 
+void furthest_apart(int l, int r, long *a_idx, long *b_idx) {
+    double max_d = 0.0;
+    double d;
+    long idx0 = idx[l];
+    for (int i = l + 1; i < r; ++i) {
+        if (idx[i] < idx0)
+            idx0 = idx[i];
+    }
+    for (int i = l; i < r; ++i) {
+        d = dist(pt_array[idx0], pt_array[idx[i]]);
+        if (d > max_d) {
+            max_d = d;
+            *a_idx = idx[i];
+        }
+    }
+    max_d = 0;
+    for (int i = l; i < r; ++i) {
+        d = dist(pt_array[*a_idx], pt_array[idx[i]]);
+        if (d > max_d) {
+            max_d = d;
+            *b_idx = idx[i];
+        }
+    }
+    if (pt_array[*a_idx][0] > pt_array[*b_idx][0])
+        swap(a_idx, b_idx);
+}
+
+int is_seq(int i, int j) {
+    return proj_scalar[i] <= proj_scalar[j];
+}
+
+int get_kth_element(int k, int l, int h) {
+
+    if (h == l + 1)
+        return idx[l];
+
+    else {
+        int i = l;
+        int j = h;
+
+        while (i < j) {
+            do {
+                i++;
+            } while (i < h && is_seq(idx[i], idx[l]));
+            if (i == h) {
+                j = h - 1;
+                break;
+            }
+            do {
+                j--;
+            } while (!is_seq(idx[j], idx[l]));
+            if (i < j)
+                swap(&idx[i], &idx[j]);
+        }
+
+        swap(&idx[l], &idx[j]);
+
+        if (j - l == k)
+            return idx[j];
+        if (k < j - l)
+            return get_kth_element(k, l, j);
+        else
+            return get_kth_element(k - (j - l) - 1, j + 1, h);
+    }
+}
+
+void get_median(int l, int h, int *median_1, int *median_2) {
+    if ((h - l) % 2 == 1)
+        *median_1 = get_kth_element((h - l - 1) / 2, l, h);
+    else {
+        *median_1 = get_kth_element((h - l) / 2 - 1, l, h);
+        *median_2 = get_kth_element(0, l + (h - l) / 2, h);
+    }
+}
+
+void print_tree(node *tree) {
+    fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
+    for (long i = 0; i < 2 * np - 1; ++i) {
+        fprintf(stdout, "%ld %ld %ld %f ", i, tree[i].left, tree[i].right, tree[i].radius);
+        if (tree[i].left == -1)
+            print_point(pt_array[tree[i].center_idx], n_dims, stdout);
+        else
+            print_point(centers[tree[i].center_idx], n_dims, stdout);
+    }
+}
+
 void print_struct(struct local_data * data, int size) {
     for (int i = 0; i < size; i++) {
         printf("id: %d, l_idx: %ld, g_idx: %ld, proj: %f\n", id, data[i].local_idx, data[i].global_idx, data[i].proj);
@@ -175,6 +261,61 @@ int * displs;
 int new_id;
 // Aux variables for the all reduce
 struct mpi_allreduce in, out;
+
+long ballAlg(long l, long r) {
+
+    ++n_nodes;
+    long id = n_nodes - 1;
+
+    if (r - l == 1) {
+        tree[id].center_idx = idx[l];
+        tree[id].radius = 0;
+        tree[id].left = -1;
+        tree[id].right = -1;
+        return id;
+    }
+
+    long c_id = n_center++;
+
+    long a, b;
+    // 2. Compute points a and b, furthest apart in the current set (approx)
+    furthest_apart(l, r, &a, &b);
+
+    // 3. Perform the orthogonal projection of all points onto line ab
+    for (int i = l; i < r; ++i)
+        proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
+
+    // 4. Compute the center, defined as the median point over all projections
+    int m1, m2 = -1;
+    get_median(l, r, &m1, &m2);
+
+    if ((r - l) % 2) {
+        orth_projv2(pt_array[a], pt_array[b], m1, centers[c_id]);
+    } else {
+        double abnorm = 0.0, aux, u = (proj_scalar[m1] + proj_scalar[m2]) / 2;
+        for (int i = 0; i < n_dims; ++i) {
+            aux = (pt_array[b][i] - pt_array[a][i]);
+            centers[c_id][i] = u * aux;
+            abnorm += aux * aux;
+        }
+        for (int i = 0; i < n_dims; ++i)
+            centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
+    }
+
+    double max_r = 0, rad;
+    for (int i = l; i < r; ++i) {
+        rad = dist(centers[c_id], pt_array[idx[i]]);
+        if (rad > max_r)
+            max_r = rad;
+    }
+    tree[id].center_idx = c_id;
+    tree[id].radius = sqrt(max_r);
+
+    tree[id].left = ballAlg(l, l + (r - l) / 2);
+    tree[id].right = ballAlg(l + (r - l) / 2, r);
+
+    return id;
+}
 
 void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
 
