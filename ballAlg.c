@@ -123,7 +123,7 @@ void mergeSort(int id, struct local_data * data, MPI_Comm comm, long * globalArr
     int new_size;
 
     while (myHeight < height) {
-        parent = (id & (~(1 << myHeight)));
+        parent = (id  & (~(1 << myHeight)));
 
         if (parent == id) {
             rightChild = (id | (1 << myHeight));
@@ -170,7 +170,7 @@ long * idx_local;
 // This is also used for the satterV
 int * displs;
 // This is a temp variable with the center for the processors to calculate the radius
-double * center;
+// double * center;
 // Another temp variable
 int new_id;
 // Aux variables for the all reduce
@@ -179,6 +179,12 @@ struct mpi_allreduce in, out;
 void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
 
     p = proc;
+
+    // if (tree_id != 0) {
+    //     printf("id: %d, l: %ld, r: %ld, tree_id: %ld, proc: %d\n", id, l, r, tree_id, p);
+    //     MPI_Barrier(comm);
+    //     exit(0);
+    // }
 
     if (!id) {
 
@@ -189,9 +195,9 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
             tree[tree_id].right = -1;
             return;
         }
-
-        c_id = n_center++;
     }
+
+    c_id = n_center++;
 
     // Local smaller index
     long idx0 = data[0].global_idx;
@@ -289,38 +295,38 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
 
         for (int i = 0; i < n_dims; ++i)
             centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
-        center = centers[c_id];
-        printf("center: %f %f\n", center[0], center[1]);
+        // center = centers[c_id];
+        printf("center: %f %f\n", centers[c_id][0], centers[c_id][1]);
         fflush(stdout);
     }
 
-    // ---
-    MPI_Barrier(MPI_COMM_WORLD);
-    double v1 = 1;
-    double v2 = 0;
-    MPI_Reduce(&v1, &v2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    printf("id: %d, v2: %f\n", id, v2);
-    MPI_Barrier(MPI_COMM_WORLD);
-    //
+    // // ---
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // double v1 = 1;
+    // double v2 = 0;
+    // MPI_Reduce(&v1, &v2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    // printf("id: %d, v2: %f\n", id, v2);
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // //
 
-    MPI_Bcast(center, n_dims, MPI_DOUBLE, 0, comm);
+    MPI_Bcast(centers[c_id], n_dims, MPI_DOUBLE, 0, comm);
 
-    printf("%ld\n", BLOCK_SIZE(id,p,r-l));
-    fflush(stdout);
-    MPI_Barrier(comm);
-    printf("%f %f\n", center[0], center[1]);
-    fflush(stdout);
-    MPI_Barrier(comm);
+    // printf("%ld\n", BLOCK_SIZE(id,p,r-l));
+    // fflush(stdout);
+    // MPI_Barrier(comm);
+    // printf("%f %f\n", center[0], center[1]);
+    // fflush(stdout);
+    // MPI_Barrier(comm);
 
     for (int i = 0; i < BLOCK_SIZE(id,p,r-l); i++) {
-        printf("id: %d, dist: %f\n", id, dist(center, pt_array[data[i].global_idx]));
+        printf("id: %d, dist: %f\n", id, dist(centers[c_id], pt_array[data[i].global_idx]));
         fflush(stdout);
     }
     MPI_Barrier(comm);
 
     double max_d = 0;
     for (int i = 0; i < BLOCK_SIZE(id,p,r-l); i++) {
-        d = dist(center, pt_array[data[i].global_idx]);
+        d = dist(centers[c_id], pt_array[data[i].global_idx]);
         if (d > max_d)
             max_d = d;
     }
@@ -333,9 +339,6 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
     MPI_Reduce(&max_d, &rad, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
 
     printf("id: %d, rad: %f\n", id, rad);
-
-    MPI_Barrier(comm);
-    exit(0);
 
     if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
         tree[tree_id].left = id_last;
@@ -363,35 +366,32 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
         data[i].global_idx = idx_local[i];
     }
 
-    // VER PARTE DE BAIXO
-
     // // Fill the block size
     // for (int i = 0; i < new_proc; i++) {
-    //     block_size[i] = BLOCK_SIZE(i,new_proc,l-r);
-    //     displs[i] = l + BLOCK_LOW(i,new_proc,l-r);
+    //     block_size[i] = BLOCK_SIZE(i,new_proc,r-l);
+    //     displs[i] = l + BLOCK_LOW(i,new_proc,r-l);
     // }
 
     MPI_Comm new_comm;
+
     MPI_Comm_split(comm, id/2, id, &new_comm);
 
     if (tree_id != 0)
         MPI_Comm_free(&comm);
 
-    int new_proc;
     MPI_Comm_rank(new_comm, &new_id);
-    MPI_Comm_size(new_comm, &new_proc);
+    MPI_Comm_size(new_comm, &p);
 
-    if (tree_id == 0)
-        MPI_Barrier(comm);
-    MPI_Barrier(new_comm);
-
+    // MPI_Barrier(comm);
+    // exit(0);
+    
     if (id/2 < 1) {
         id = new_id;
-        ballAlg(l, l + (r - l) / 2, tree[tree_id].left, lvl + 1, new_proc, new_comm);
+        ballAlg(l, l + (r - l) / 2, tree[tree_id].left, lvl + 1, p, new_comm);
     }
     else {
         id = new_id;
-        ballAlg(l + (r - l) / 2, r, tree[tree_id].right, lvl + 1, new_proc, new_comm);
+        ballAlg(l + (r - l) / 2, r, tree[tree_id].right, lvl + 1, p, new_comm);
     }
     
 }
@@ -409,8 +409,6 @@ void print_tree(node *tree) {
 
 int main(int argc, char **argv) {
 
-    int p_world;
-
     // Value for time counting
     double elapsed_time;
 
@@ -424,22 +422,22 @@ int main(int argc, char **argv) {
     // Get id of processor
     MPI_Comm_rank (MPI_COMM_WORLD, &id);
     // Get number of processors
-    MPI_Comm_size (MPI_COMM_WORLD, &p_world);
+    MPI_Comm_size (MPI_COMM_WORLD, &p);
 
-    // ---
+    // // ---
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    // MPI_Barrier(MPI_COMM_WORLD);
 
-    double v1 = 1;
-    double v2 = 0;
+    // double v1 = 1;
+    // double v2 = 0;
 
-    MPI_Reduce(&v1, &v2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    // MPI_Reduce(&v1, &v2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
-    printf("id: %d, v2: %f\n", id, v2);
+    // printf("id: %d, v2: %f\n", id, v2);
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    // MPI_Barrier(MPI_COMM_WORLD);
 
-    // --- 
+    // // --- 
 
     // Check if the arguments are corrects
     if (argc != 4) {
@@ -454,22 +452,22 @@ int main(int argc, char **argv) {
 
     // Every processor knows how much data the other processors have
     // This is needed for the merge sort
-    block_size = (int *) malloc (p_world * sizeof(int));
+    block_size = (int *) malloc (p * sizeof(int));
     // Array of structs with indices and projections
-    data = (struct local_data *) malloc (ceil(np/p_world)*sizeof(struct local_data));
-    idx_local = (long *) malloc (ceil(np/p_world)*sizeof(long));
-    displs = (int *) malloc (ceil(np/p_world)*sizeof(int));
+    data = (struct local_data *) malloc (ceil(np/p)*sizeof(struct local_data));
+    idx_local = (long *) malloc (ceil(np/p)*sizeof(long));
+    displs = (int *) malloc (ceil(np/p)*sizeof(int));
 
     // Fill the block size
-    for (int i = 0; i < p_world; i++) {
-        block_size[i] = BLOCK_SIZE(i,p_world,np);
-        displs[i] = BLOCK_LOW(i,p_world,np);
+    for (int i = 0; i < p; i++) {
+        block_size[i] = BLOCK_SIZE(i,p,np);
+        displs[i] = BLOCK_LOW(i,p,np);
     }
 
     // Fill the struct array
-    for (int i = 0; i < BLOCK_SIZE(id,p_world,np); ++i) {
+    for (int i = 0; i < BLOCK_SIZE(id,p,np); ++i) {
         data[i].local_idx = i;
-        data[i].global_idx = BLOCK_LOW(id,p_world,np) + i;
+        data[i].global_idx = BLOCK_LOW(id,p,np) + i;
     }
 
     // Creating of a MPI Struct to pass data around
@@ -501,9 +499,9 @@ int main(int argc, char **argv) {
     // Alocation of the sorted indexes in all processors
     idx_sorted = (long *) malloc (np * sizeof(long));
     // Temporary center for radius calculation
-    center = (double *) malloc (n_dims * sizeof(double));
+    // center = (double *) malloc (n_dims * sizeof(double));
 
-    ballAlg(0, np, 0, 0, p_world, MPI_COMM_WORLD);
+    ballAlg(0, np, 0, 0, p, MPI_COMM_WORLD);
 
     elapsed_time += MPI_Wtime();
 
