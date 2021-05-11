@@ -262,20 +262,19 @@ int new_id;
 // Aux variables for the all reduce
 struct mpi_allreduce in, out;
 
-long ballAlg(long l, long r) {
-
-    ++n_nodes;
-    long id = n_nodes - 1;
+void ballAlg(long l, long r, long id, int lvl) {
 
     if (r - l == 1) {
-        tree[id].center_idx = idx[l];
+        for (int i = 0; i < n_dims; ++i)
+            tree[id].center[i] = pt_array[idx_local[l]][i];
         tree[id].radius = 0;
         tree[id].left = -1;
         tree[id].right = -1;
-        return id;
+        return;
     }
 
-    long c_id = n_center++;
+    // HELP
+    c_id = n_center++;
 
     long a, b;
     // 2. Compute points a and b, furthest apart in the current set (approx)
@@ -283,38 +282,43 @@ long ballAlg(long l, long r) {
 
     // 3. Perform the orthogonal projection of all points onto line ab
     for (int i = l; i < r; ++i)
-        proj_scalar[idx[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx[i]]);
+        proj_scalar[idx_local[i]] = orth_projv1(pt_array[a], pt_array[b], pt_array[idx_local[i]]);
 
     // 4. Compute the center, defined as the median point over all projections
     int m1, m2 = -1;
     get_median(l, r, &m1, &m2);
 
-    if ((r - l) % 2) {
-        orth_projv2(pt_array[a], pt_array[b], m1, centers[c_id]);
-    } else {
-        double abnorm = 0.0, aux, u = (proj_scalar[m1] + proj_scalar[m2]) / 2;
-        for (int i = 0; i < n_dims; ++i) {
-            aux = (pt_array[b][i] - pt_array[a][i]);
-            centers[c_id][i] = u * aux;
-            abnorm += aux * aux;
-        }
-        for (int i = 0; i < n_dims; ++i)
-            centers[c_id][i] = centers[c_id][i] / abnorm + pt_array[a][i];
+    double abnorm = 0.0, aux, u;
+    if ((r - l) % 2)
+        u = orth_projv1(pt_array[a], pt_array[b], pt_array[m1]);
+    else
+        u = (orth_projv1(pt_array[a], pt_array[b], pt_array[m1]) + orth_projv1(pt_array[a], pt_array[b], pt_array[m2])) / 2;
+    for (int i = 0; i < n_dims; ++i) {
+        aux = (pt_array[b][i] - pt_array[a][i]);
+        centers[c_id][i] = u * aux;
+        abnorm += aux * aux;
     }
 
     double max_r = 0, rad;
     for (int i = l; i < r; ++i) {
-        rad = dist(centers[c_id], pt_array[idx[i]]);
+        rad = dist(tree[id].center, pt_array[idx_local[i]]);
         if (rad > max_r)
             max_r = rad;
     }
-    tree[id].center_idx = c_id;
     tree[id].radius = sqrt(max_r);
 
-    tree[id].left = ballAlg(l, l + (r - l) / 2);
-    tree[id].right = ballAlg(l + (r - l) / 2, r);
+    if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
+        tree[id].left = id_last;
+        tree[id].right = id_last + 1;
+        id_last += 2;
+    } else {
+        tree[id].left = 2 * id + 1;
+        tree[id].right = 2 * id + 2;
+    }
 
-    return id;
+    ballAlg(l, l + (r - l) / 2, tree[id].left, lvl + 1);
+    ballAlg(l + (r - l) / 2, r, tree[id].right, lvl + 1);
+
 }
 
 void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
@@ -507,33 +511,38 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
         data[i].global_idx = idx_local[i];
     }
 
+    // // HELP
     // // Fill the block size
     // for (int i = 0; i < new_proc; i++) {
     //     block_size[i] = BLOCK_SIZE(i,new_proc,r-l);
     //     displs[i] = l + BLOCK_LOW(i,new_proc,r-l);
     // }
 
-    MPI_Comm new_comm;
+    if (lvl == log(p)/log(2)-1) {
+        if (!id)
+            ballAlg(0, BLOCK_SIZE(id,p,r-l), tree[tree_id].left, lvl + 1);
+        else
+            ballAlg(BLOCK_SIZE(id-1,p,r-l), BLOCK_SIZE(id-1,p,r-l)+BLOCK_SIZE(id,p,r-l), tree[tree_id].right, lvl + 1);
+    } else {
+        MPI_Comm new_comm;
 
-    MPI_Comm_split(comm, id/2, id, &new_comm);
+        MPI_Comm_split(comm, id/2, id, &new_comm);
 
-    if (tree_id != 0)
-        MPI_Comm_free(&comm);
+        if (tree_id != 0)
+            MPI_Comm_free(&comm);
 
-    MPI_Comm_rank(new_comm, &new_id);
-    MPI_Comm_size(new_comm, &p);
-
-    // MPI_Barrier(comm);
-    // exit(0);
-    
-    if (id/2 < 1) {
-        id = new_id;
-        ballAlg(l, l + (r - l) / 2, tree[tree_id].left, lvl + 1, p, new_comm);
+        MPI_Comm_rank(new_comm, &new_id);
+        MPI_Comm_size(new_comm, &p);
+        if (id/2 < 1) {
+            id = new_id;
+            ballAlg(l, l + (r - l) / 2, tree[tree_id].left, lvl + 1, p, new_comm);
+        }
+        else {
+            id = new_id;
+            ballAlg(l + (r - l) / 2, r, tree[tree_id].right, lvl + 1, p, new_comm);
+        }
     }
-    else {
-        id = new_id;
-        ballAlg(l + (r - l) / 2, r, tree[tree_id].right, lvl + 1, p, new_comm);
-    }
+
     
 }
 
