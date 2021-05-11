@@ -378,6 +378,8 @@ void ballAlg_seq(long l, long r, long tree_id, int lvl) {
 
 double * center;
 int p_initial;
+int * branch_size;
+int id_initial;
 
 void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
 
@@ -568,6 +570,21 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
         fflush(stdout);
     }
 
+    if (lvl == log(p_initial)/log(2)-1) {
+        if (id_initial < p / pow(2, lvl)) {
+            tree[tree_counter].left = pow(2, lvl+1) - 1;
+            tree[tree_counter].right = pow(2, lvl+1) - 1 + branch_size[0];
+        }
+        else if (id_initial == id){
+            tree[tree_counter].left = pow(2, lvl+1) - 1 + branch_size[id_initial-1];
+            tree[tree_counter].right = pow(2, lvl+1) - 1 + branch_size[id_initial-1];
+        }
+        else {
+            tree[tree_counter].left = pow(2, lvl+1) - 1 + branch_size[id_initial-2];
+            tree[tree_counter].right = pow(2, lvl+1) - 1 + branch_size[id_initial-2];
+        }
+    }
+
     if (((np & (np - 1)) != 0) && lvl == n_levels - 1) {
         tree[tree_counter].left = id_last;
         tree[tree_counter].right = id_last + 1;
@@ -586,10 +603,8 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
         tree[tree_counter].radius = sqrt(rad);
         n_center++;
 
-        // if (par_info == 1) {
-            fprintf(stdout, "%ld %ld %ld %f ", tree_id, tree[tree_counter].left, tree[tree_counter].right, tree[tree_counter].radius);
-            print_point(centers[tree[tree_counter].center_idx], n_dims, stdout);
-        // }
+        fprintf(stdout, "%ld %ld %ld %f ", tree_id, tree[tree_counter].left, tree[tree_counter].right, tree[tree_counter].radius);
+        print_point(centers[tree[tree_counter].center_idx], n_dims, stdout);
                 
         tree_counter++;
     }
@@ -602,13 +617,6 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
         printf("id: %d, tree_id: %ld, l_idx: %ld, g_idx: %ld\n", id, tree_id, data[i].local_idx, data[i].global_idx);
         fflush(stdout);
     }
-
-    // // HELP
-    // // Fill the block size
-    // for (int i = 0; i < new_proc; i++) {
-    //     block_size[i] = BLOCK_SIZE(i,new_proc,r-l);
-    //     displs[i] = l + BLOCK_LOW(i,new_proc,r-l);
-    // }
 
     if (lvl == log(p_initial)/log(2)-1) {
         if (!id)
@@ -661,6 +669,7 @@ int main(int argc, char **argv) {
     MPI_Comm_size (MPI_COMM_WORLD, &p);
 
     p_initial = p;
+    id_initial = id;
 
     // // ---
 
@@ -696,10 +705,15 @@ int main(int argc, char **argv) {
     idx_local = (long *) malloc (ceil(np/p)*sizeof(long));
     displs = (int *) malloc (ceil(np/p)*sizeof(int));
 
+    branch_size = (int *) malloc (p * sizeof(int));
+
     // Fill the block size
+    int previous = 0;
     for (int i = 0; i < p; i++) {
         block_size[i] = BLOCK_SIZE(i,p,np);
         displs[i] = BLOCK_LOW(i,p,np);
+        branch_size[i] = 2*block_size[i]-1 + previous;
+        previous = branch_size[i];
     }
 
     // Fill the struct array
