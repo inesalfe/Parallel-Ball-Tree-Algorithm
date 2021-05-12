@@ -401,6 +401,11 @@ int * branch_size;
 
 void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
 
+    if (lvl == 1) {
+        MPI_Barrier(MPI_COMM_WORLD);
+        exit(0);        
+    }
+
     p = proc;
 
     // if (par_info == 1) {
@@ -518,26 +523,22 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
             fflush(stdout);
         }
 
-        if (par_info == 1) {
-            printf("a: %ld, b: %ld, n_dims: %d\n", a, b, n_dims);
-            fflush(stdout);
-            print_point(pt_array[a], n_dims, stdout);
-            fflush(stdout);
-            print_point(pt_array[b], n_dims, stdout);
-            fflush(stdout);
-            print_point(pt_array[m1], n_dims, stdout);
-            fflush(stdout);
-        }
+        // if (par_info == 1) {
+        //     printf("a: %ld, b: %ld, n_dims: %d\n", a, b, n_dims);
+        //     fflush(stdout);
+        //     print_point(pt_array[a], n_dims, stdout);
+        //     fflush(stdout);
+        //     print_point(pt_array[b], n_dims, stdout);
+        //     fflush(stdout);
+        //     print_point(pt_array[m1], n_dims, stdout);
+        //     fflush(stdout);
+        // }
 
         double abnorm = 0.0, aux, u;
         if ((r - l) % 2)
             u = orth_projv1(pt_array[a], pt_array[b], pt_array[m1]);
         else
             u = (orth_projv1(pt_array[a], pt_array[b], pt_array[m1]) + orth_projv1(pt_array[a], pt_array[b], pt_array[m2])) / 2;
-        if (par_info == 1) {
-            printf("After2!\n");
-            fflush(stdout);
-        }
         for (int i = 0; i < n_dims; ++i) {
             aux = (pt_array[b][i] - pt_array[a][i]);
             centers[n_center][i] = u * aux;
@@ -555,9 +556,6 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
             fflush(stdout);
         }
     }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-    exit(0);
 
     // // ---
     // MPI_Barrier(MPI_COMM_WORLD);
@@ -664,11 +662,6 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
         }
     }
 
-    // if (lvl == 1) {
-    //     MPI_Barrier(MPI_COMM_WORLD);
-    //     exit(0);
-    // }
-
     if (lvl == log(p_initial)/log(2)-1) {
         if (!id) {
             idx_counter = tree[temp_id].left;
@@ -679,9 +672,18 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
             ballAlg_seq(0, BLOCK_SIZE(id,p,r-l));
         }
     } else {
+
         MPI_Comm new_comm;
 
+        printf("id: %d\n", id);
+        fflush(stdout);
+
         MPI_Comm_split(comm, id/2, id, &new_comm);
+
+        // if (lvl == 0) {
+        //     MPI_Barrier(MPI_COMM_WORLD);
+        //     exit(0);
+        // }
 
         if (tree_id != 0)
             MPI_Comm_free(&comm);
