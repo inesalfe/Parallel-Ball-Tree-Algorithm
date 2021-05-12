@@ -526,9 +526,11 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
             abnorm += aux * aux;
         }
 
-        for (int i = 0; i < n_dims; ++i)
+        for (int i = 0; i < n_dims; ++i) {
             centers[n_center][i] = centers[n_center][i] / abnorm + pt_array[a][i];
-        center = centers[n_center];
+            center[i] = centers[n_center][i];
+        }
+        // center = centers[n_center];
         if (par_info == 1) {
             printf("center: %f %f\n", center[0], center[1]);
             fflush(stdout);
@@ -796,8 +798,6 @@ int main(int argc, char **argv) {
     free(idx_local);
     free(displs);
     free(idx_sorted);
-    MPI_Barrier(MPI_COMM_WORLD);
-    exit(0);
     free(center);
     free(pt_array[0]);
     free(pt_array);
@@ -806,11 +806,12 @@ int main(int argc, char **argv) {
     free(tree);
 
     MPI_Type_free(&mpi_data_struct);
-    MPI_Finalize ();
 
-    fprintf(stderr, "%.1lf\n", elapsed_time);
+    if (!id_initial) {
+        fprintf(stderr, "%.1lf\n", elapsed_time);
+        //print_tree(tree);
+    }
 
-    // print_tree(tree);
+    MPI_Finalize();
 
-    exit(0);
 }
