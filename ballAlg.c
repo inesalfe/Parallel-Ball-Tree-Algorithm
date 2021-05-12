@@ -9,7 +9,7 @@
 #define BLOCK_HIGH(id,p,np) (BLOCK_LOW((id)+1,p,np)-1)
 #define BLOCK_SIZE(id,p,np) (BLOCK_HIGH(id,p,np)-BLOCK_LOW(id,p,np)+1)
 
-int par_info = 0;
+int par_info = 1;
 
 // This is used for the AllReduce
 struct mpi_allreduce { 
@@ -213,6 +213,9 @@ void merge_sort(struct local_data * data1, struct local_data * data2, struct loc
     // print_struct(data_merge, size1+size2);
 }
 
+int p_initial;
+int id_initial;
+
 // Puts sorted indexes into globalArray (defines only in process 0)
 void mergeSort(int id, struct local_data * data, MPI_Comm comm, long * globalArray){
     
@@ -223,7 +226,7 @@ void mergeSort(int id, struct local_data * data, MPI_Comm comm, long * globalArr
     struct local_data * data_merge;
 
     myHeight = 0;
-    int size = get_block_size(id, myHeight);
+    int size = block_size[id_initial];
 
     qsort(data, size, sizeof(struct local_data), compare);
 
@@ -236,8 +239,10 @@ void mergeSort(int id, struct local_data * data, MPI_Comm comm, long * globalArr
         if (parent == id) {
             rightChild = (id | (1 << myHeight));
 
-            data2 = (struct local_data *) malloc (size*sizeof(struct local_data));
+            data2 = (struct local_data *) malloc (get_block_size(rightChild, myHeight) *sizeof(struct local_data));
             MPI_Recv(data2, get_block_size(rightChild, myHeight), mpi_data_struct, rightChild, 0, comm, MPI_STATUS_IGNORE);
+
+            // printf("id: %d\n", id);
 
             new_size = BLOCK_SIZE(id,p,np) + BLOCK_SIZE(rightChild,p,np);
             data_merge = (struct local_data *) malloc (new_size*sizeof(struct local_data));
@@ -280,6 +285,8 @@ void mergeSort(int id, struct local_data * data, MPI_Comm comm, long * globalArr
 int idx_counter;
 
 long ballAlg_seq(long l, long r) {
+
+    par_info = 2;
 
     ++idx_counter;
     long tree_id = idx_counter - 1;
@@ -390,9 +397,7 @@ long ballAlg_seq(long l, long r) {
 }
 
 double * center;
-int p_initial;
 int * branch_size;
-int id_initial;
 
 void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
 
@@ -467,11 +472,9 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
     if (pt_array[a][0] > pt_array[b][0])
         swap(&a, &b);
 
-    if (tree_id != 0) {
-        if (par_info == 1) {
-            printf("node_id: %ld, id: %d, a: %ld, b: %ld\n", tree_id, id, a, b);
-            fflush(stdout);
-        }
+    if (par_info == 1) {
+        printf("node_id: %ld, id: %d, a: %ld, b: %ld\n", tree_id, id, a, b);
+        fflush(stdout);
     }
 
     for (int i = 0; i < BLOCK_SIZE(id,p,r-l); ++i) {
@@ -515,11 +518,26 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
             fflush(stdout);
         }
 
+        if (par_info == 1) {
+            printf("a: %ld, b: %ld, n_dims: %d\n", a, b, n_dims);
+            fflush(stdout);
+            print_point(pt_array[a], n_dims, stdout);
+            fflush(stdout);
+            print_point(pt_array[b], n_dims, stdout);
+            fflush(stdout);
+            print_point(pt_array[m1], n_dims, stdout);
+            fflush(stdout);
+        }
+
         double abnorm = 0.0, aux, u;
         if ((r - l) % 2)
             u = orth_projv1(pt_array[a], pt_array[b], pt_array[m1]);
         else
             u = (orth_projv1(pt_array[a], pt_array[b], pt_array[m1]) + orth_projv1(pt_array[a], pt_array[b], pt_array[m2])) / 2;
+        if (par_info == 1) {
+            printf("After2!\n");
+            fflush(stdout);
+        }
         for (int i = 0; i < n_dims; ++i) {
             aux = (pt_array[b][i] - pt_array[a][i]);
             centers[n_center][i] = u * aux;
@@ -530,12 +548,16 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
             centers[n_center][i] = centers[n_center][i] / abnorm + pt_array[a][i];
             center[i] = centers[n_center][i];
         }
+
         // center = centers[n_center];
         if (par_info == 1) {
             printf("center: %f %f\n", center[0], center[1]);
             fflush(stdout);
         }
     }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    exit(0);
 
     // // ---
     // MPI_Barrier(MPI_COMM_WORLD);
@@ -642,6 +664,11 @@ void ballAlg(long l, long r, long tree_id, int lvl, int proc, MPI_Comm comm) {
         }
     }
 
+    // if (lvl == 1) {
+    //     MPI_Barrier(MPI_COMM_WORLD);
+    //     exit(0);
+    // }
+
     if (lvl == log(p_initial)/log(2)-1) {
         if (!id) {
             idx_counter = tree[temp_id].left;
@@ -746,10 +773,10 @@ int main(int argc, char **argv) {
         displs[i] = BLOCK_LOW(i,p,np);
         branch_size[i] = 2*block_size[i]-1 + previous;
         previous = branch_size[i];
-        // if(!id) {
-        //     printf("i: %d, branch_size[i]: %d\n", i, branch_size[i]);
-        //     fflush(stdout);
-        // }
+        if(!id) {
+            printf("i: %d, branch_size[i]: %d\n", i, branch_size[i]);
+            fflush(stdout);
+        }
     }
 
     // Fill the struct array
@@ -781,8 +808,12 @@ int main(int argc, char **argv) {
     double *center_aux = (double *)malloc((np - 1) * n_dims * sizeof(double));
 
     // Alocation of the center in all processors
-    centers = (double **)malloc((log(p_initial)/log(2)+2*ceil(np/p_initial)-1) * sizeof(double *));
-    for (int i = 0; i < (log(p_initial)/log(2)+2*ceil(np/p_initial)-1); ++i)
+    if(!id) {
+        printf("n: %f", (log(p_initial)/log(2)+ceil(np/p_initial)-1));
+        fflush(stdout);
+    }
+    centers = (double **)malloc((log(p_initial)/log(2)+ceil(np/p_initial)-1) * sizeof(double *));
+    for (int i = 0; i < (log(p_initial)/log(2)+ceil(np/p_initial)-1); ++i)
         centers[i] = &center_aux[i * n_dims];
     // Alocation of the sorted indexes in all processors
     idx_sorted = (long *) malloc (np * sizeof(long));
@@ -790,6 +821,9 @@ int main(int argc, char **argv) {
     center = (double *) malloc (n_dims * sizeof(double));
 
     ballAlg(0, np, 0, 0, p, MPI_COMM_WORLD);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    exit(0);
 
     elapsed_time += MPI_Wtime();
 
@@ -811,6 +845,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "%.1lf\n", elapsed_time);
         //print_tree(tree);
     }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    exit(0);
 
     MPI_Finalize();
 
