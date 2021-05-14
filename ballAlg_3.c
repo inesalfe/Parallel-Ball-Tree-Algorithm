@@ -58,13 +58,6 @@ void swap(int i, int j) {
     }
 }
 
-double dist(double *pt1, double *pt2) {
-    double dist = 0.0;
-    for (int d = 0; d < n_dims; ++d)
-        dist += (pt1[d] - pt2[d]) * (pt1[d] - pt2[d]);
-    return dist;
-}
-
 void swap_vec(int i, int j) {
     double temp = glob_pivots[i];
     glob_pivots[i] = glob_pivots[j];
@@ -184,20 +177,20 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
 
     if (!id) {
 
-        if (block_size[id_initial] == 1) {
-            // Não sei o que fazer no center_idx
-            // tree[tree_counter].center_idx = ;
-            // tree[tree_counter].radius = 0;
-            // tree[tree_counter].left = -1;
-            // tree[tree_counter].right = -1;
-            // tree[tree_counter].node_id = tree_id;
-            // tree_counter++;
+        if (r - l == 1) {
+        	// Não sei o que fazer no center_idx
+            tree[tree_counter].center_idx = ;
+            tree[tree_counter].radius = 0;
+            tree[tree_counter].left = -1;
+            tree[tree_counter].right = -1;
+            tree[tree_counter].node_id = tree_id;
+            tree_counter++;
             return;
         }
     }
 
     in_min.idx0 = idx_global[0];
-    for (int i = 0; i < block_size[id_initial]; i++) {
+    for (int i = 0; i < block_size[id_inital]; i++) {
         if (idx_global[i] < in_min.idx0) {
             in_min.idx0 = idx_global[i];
             in_min.p_id = id;
@@ -207,9 +200,9 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
     MPI_Allreduce(&in_min, &out_min, 1, MPI_2INT, MPI_MINLOC, comm);
 
     if (id == out_min.p_id) {
-        for (int i = 0; i < n_dims; i++) {
-            pt_arr_idx0[i] = pt_arr[out_min.idx0][i];
-        }
+    	for (int i = 0; i < n_dims; i++) {
+        	pt_arr_idx0[i] = pt_array[out_min.idx0][i];
+    	}
     }
 
     MPI_Bcast(pt_arr_idx0, n_dims, MPI_DOUBLE, 0, comm);
@@ -217,8 +210,8 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
     double d;
     in_max.max_d = 0;
     in_max.idx = -1;
-    for (int i = 0; i < block_size[id_initial]; ++i) {
-        d = dist(pt_arr_idx0, pt_arr[i]);
+    for (int i = 0; i < block_size[id_inital]; ++i) {
+        d = dist(pt_arr_idx0, pt_array[i]);
         if (d > in_max.max_d) {
             in_max.max_d = d;
             in_max.idx = i;
@@ -226,18 +219,18 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
     }
 
     MPI_Allreduce(&in_max, &out_max, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
-    
-    if (in_max.max_d == out_max.max_d)    
-        for (int i = 0; i < n_dims; i++) {
-            pt_arr_a[i] = pt_arr[out_max.idx][i];
-        }
+	
+	if (in_max.max_d == out_max.max_d)    
+    	for (int i = 0; i < n_dims; i++) {
+        	pt_arr_a[i] = pt_array[out_max.idx][i];
+    	}
 
     MPI_Bcast(pt_arr_a, n_dims, MPI_DOUBLE, 0, comm);
 
     in_max.max_d = 0;
     in_max.idx = -1;
-    for (int i = 0; i < block_size[id_initial]; ++i) {
-        d = dist(pt_arr_a, pt_arr[i]);
+    for (int i = 0; i < block_size[id_inital]; ++i) {
+        d = dist(pt_arr_a, pt_array[i]);
         if (d > in_max.max_d) {
             in_max.max_d = d;
             in_max.idx = i;
@@ -246,28 +239,28 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
 
     MPI_Allreduce(&in_max, &out_max, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
     
-    if (in_max.max_d == out_max.max_d)    
-        for (int i = 0; i < n_dims; i++) {
-            pt_arr_b[i] = pt_arr[out_max.idx][i];
-        }
+	if (in_max.max_d == out_max.max_d)    
+    	for (int i = 0; i < n_dims; i++) {
+        	pt_arr_b[i] = pt_array[out_max.idx][i];
+    	}
 
     MPI_Bcast(pt_arr_b, n_dims, MPI_DOUBLE, 0, comm);
 
-    if (pt_arr_a[0] > pt_arr_b[0]) {
-        double temp;
-        for (int i = 0; i < n_dims; i++) {
-            temp = pt_arr_a[i];
-            pt_arr_a[i] = pt_arr_a[i];
-            pt_arr_b[i] = pt_arr_a[i];
-        }
-    }
+	if (pt_arr_a[0] > pt_arr_b[0]) {
+		double temp;
+		for (int i = 0; i < n_dims; i++) {
+			temp = pt_arr_a[i];
+			pt_arr_a[i] = pt_arr_a[i];
+			pt_arr_b[i] = pt_arr_a[i];
+		}
+	}
 
-    for (int i = 0; i < block_size[id_initial]; ++i) {
-        proj[i] = orth_projv1(pt_arr_a, pt_arr_b, pt_arr[i]);
+    for (int i = 0; i < block_size[id_inital]; ++i) {
+        proj[i] = orth_projv1(pt_arr_a, pt_arr_b, pt_array[i]);
     }
 
     int min_index = 0;
-    for(int i = 0; i < block_size[id_initial]; ++i) {
+    for(int i = 0; i < block_size[id_inital]; ++i) {
         if(proj[i] < proj[min_index]){
             min_index = i;
         }
@@ -278,8 +271,8 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
     int temp_idx = -1;
     int piv_idx, prev_piv_idx = 0;
     for(int i = 1; i < p; ++i) {
-        piv_idx = i * block_size[id_initial] / p - prev_piv_idx - 1;
-        temp_idx = quickselect_seq(piv_idx, prev_piv_idx+1, block_size[id_initial]);
+        piv_idx = i * block_size[id_inital] / p - prev_piv_idx - 1;
+        temp_idx = quickselect_seq(piv_idx, prev_piv_idx+1, block_size[id_inital]);
         prev_piv_idx = temp_idx;
         pivots[i] = proj[temp_idx];
     }
@@ -297,13 +290,13 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
 
     MPI_Bcast(pivots, p-1, MPI_DOUBLE, 0, comm);
 
-    send_counts[0] = partition(pivots[0], 0, block_size[id_initial]);
+    send_counts[0] = partition(pivots[0], 0, r);
     int sum = send_counts[0];
     for(int i = 1; i < p-1; i++) {
-        send_counts[i] = partition(pivots[i], sum, block_size[id_initial]) - sum;
+        send_counts[i] = partition(pivots[i], sum, r) - sum;
         sum += send_counts[i];
     }
-    send_counts[p-1] = block_size[id_initial] - sum;
+    send_counts[p-1] = r - sum;
 
     MPI_Alltoall(send_counts, 1, MPI_INT, recv_counts, 1, MPI_INT, comm);
 
@@ -328,7 +321,7 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         recv_displs[i] *= n_dims;
     }
 
-    MPI_Alltoallv(p_aux, send_counts, send_displs, MPI_DOUBLE, p_aux_2, recv_counts, recv_displs, MPI_DOUBLE, comm);
+    MPI_Alltoallv(p_aux, send_counts, send_displs, MPI_DOUBLE, p_aux_3, recv_counts, recv_displs, MPI_DOUBLE, comm);
     for (long i = 0; i < sum1; i++)
         pt_arr[i] = &p_aux_2[i * n_dims];
 
@@ -345,7 +338,7 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         if (np%2 == 0) {
             min_proj = proj[m1+1];
             m2 = m1+1;
-            for (int i = m1+1; block_size[id_initial]; i++)
+            for (int i = m1+1; i < r; i++)
                 if (proj[i] < min_proj) {
                     min_proj = proj[i];
                     m2 = i;
@@ -431,7 +424,7 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
                 if (total_size != np/2) {
                     min_proj = proj[m1+1];
                     m2 = m1+1;
-                    for (int i = m1+1; i < block_size[id_initial]; i++)
+                    for (int i = m1+1; i < r; i++)
                         if (proj[i] < min_proj) {
                             min_proj = proj[i];
                             m2 = i;
@@ -461,7 +454,7 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
                 m1 = quickselect_seq(np/2-1-total_size, 0, sum1);
                 min_proj = proj[m1+1];
                 m2 = m1+1;
-                for (int i = m1+1; i < block_size[id_initial]; i++)
+                for (int i = m1+1; i < r; i++)
                     if (proj[i] < min_proj) {
                         min_proj = proj[i];
                         m2 = i;
@@ -481,7 +474,7 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
                 m1 = -1;
                 min_proj = proj[m1+1];
                 m2 = m1+1;
-                for (int i = m1+1; i < block_size[id_initial]; i++)
+                for (int i = m1+1; i < r; i++)
                     if (proj[i] < min_proj) {
                         min_proj = proj[i];
                         m2 = i;
@@ -504,8 +497,6 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         u = 0;
     }
 
-    block_size[id_initial] = sum1;
-
     double u_aux;
     MPI_Allreduce(&u, &u_aux, 1, MPI_DOUBLE, MPI_SUM, comm);
     u = u_aux;
@@ -518,12 +509,12 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
     }
 
     for (int i = 0; i < n_dims; ++i) {
-        center[i] = center[i] / abnorm + pt_arr_a[i];
+        center[i] = center[i] / abnorm + pt_array[a][i];
     }
 
     double max_d = 0;
     for (int i = 0; i < block_size[id_initial]; i++) {
-        d = dist(center, pt_arr[i]);
+        d = dist(center, pt_array[i]);
         if (d > max_d)
             max_d = d;
     }
@@ -532,8 +523,6 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
    
     MPI_Reduce(&max_d, &rad, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    exit(0);
     
 }
 
@@ -588,17 +577,17 @@ int main(int argc, char **argv) {
                 random();
         }
 
-    // Se desse para englobar este no ciclo de cima era fixe
-    for (int i = 0; i < block_size[id]; i++) {
-        idx_global[i] = BLOCK_LOW(id,p,np) + i;
-    }
+	// Se desse para englobar este no ciclo de cima era fixe
+	for (int i = 0; i < block_size[id]; i++) {
+		idx_global[i] = BLOCK_LOW(id,p,np) + i;
+	}
 
     pt_arr_idx0 = (double *) malloc (n_dims*sizeof(double));
     pt_arr_a = (double *) malloc (n_dims*sizeof(double));
     pt_arr_b = (double *) malloc (n_dims*sizeof(double));
     proj = (double *) malloc (aux * sizeof(double));
     pivots = (double *) malloc (p * sizeof(double));
-    glob_pivots = (double *) malloc (p * p * sizeof(double));
+	glob_pivots = (double *) malloc (p * p * sizeof(double));
     
 
     send_displs = (int *) malloc (p * sizeof(int));
