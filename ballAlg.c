@@ -14,6 +14,8 @@ double * proj;
 double ** pt_arr_2;
 double * proj_2;
 double * p_aux_2;
+double * recv_buffer;
+double * p_aux_3;
 long * idx_local;
 int id;
 int id_initial;
@@ -27,6 +29,9 @@ double * pivots;
 double * glob_pivots;
 int * send_displs;
 int * recv_displs;
+int * send_counts;
+int * recv_counts;
+double * p_aux;
 
 void print_point(double *pt, int dim) {
     for (int i = 0; i < dim; ++i) {
@@ -40,8 +45,9 @@ void swap(int i, int j) {
     double temp = proj[i];
     proj[i] = proj[j];
     proj[j] = temp;
+    double temp_pt;
     for (int k = 0; k < n_dims; k++) {
-        double temp_pt = pt_arr[i][k];
+        temp_pt = pt_arr[i][k];
         pt_arr[i][k] = pt_arr[j][k];
         pt_arr[j][k] = temp_pt;
     }
@@ -123,10 +129,10 @@ double quickselect_seq_2(int k, int l, int h) {
     }
 }
 
-double quickselect_seq(int k, int l, int h) {
+int quickselect_seq(int k, int l, int h) {
 
     if (h == l + 1)
-        return proj[l];
+        return l;
 
     else {
         int i = l;
@@ -150,7 +156,7 @@ double quickselect_seq(int k, int l, int h) {
         swap(l, j);
 
         if (j - l == k)
-            return proj[j];
+            return j;
         if (k < j - l)
             return quickselect_seq(k, l, j);
         else
@@ -181,14 +187,16 @@ void get_median(int l, int r, int p, MPI_Comm comm){
     // exit(0);
 
     // Outros dois pivots são escolhido como o primeiro elemento dado um índice
+    int idx = -1;
     for(int i = 1; i < p; ++i) {
-        pivots[i] = quickselect_seq((r-l)/p-1, (i-1)*(r-l)/p+1, r);
+        idx = quickselect_seq((r-l)/p-1, (i-1)*(r-l)/p+1, r);
+        pivots[i] = proj[idx];
     }
 
     // print_point(proj, 9);
 
-    // printf("id: %d, pivots[0]: %f, pivots[1]: %f, pivots[2]: %f\n", id, pivots[0], pivots[1], pivots[2]);
-    // fflush(stdout);
+    printf("id: %d, pivots[0]: %f, pivots[1]: %f, pivots[2]: %f\n", id, pivots[0], pivots[1], pivots[2]);
+    fflush(stdout);
 
     MPI_Barrier(MPI_COMM_WORLD);
     // exit(0);
@@ -196,9 +204,9 @@ void get_median(int l, int r, int p, MPI_Comm comm){
     // Enviar os pivots locais para o primeiro processador
     MPI_Gather(pivots, p, MPI_DOUBLE, glob_pivots, p, MPI_DOUBLE, 0, comm);
 
-    // if (!id) {
-    //     print_point(glob_pivots, p*p);
-    // }
+    if (!id) {
+        print_point(glob_pivots, p*p);
+    }
 
     // O primeiro processador calcula p-1 pivots utilizando quick select
     if(!id){
@@ -208,8 +216,8 @@ void get_median(int l, int r, int p, MPI_Comm comm){
         // print_point(glob_pivots, 9);
     }
 
-    // printf("id: %d, pivots[0]: %f, pivots[1]: %f\n", id, pivots[0], pivots[1]);
-    // fflush(stdout);
+    printf("id: %d, pivots[0]: %f, pivots[1]: %f\n", id, pivots[0], pivots[1]);
+    fflush(stdout);
 
     // Enviam-se esses pivots para todos os processadores
     MPI_Bcast(pivots, p-1, MPI_DOUBLE, 0, comm);
@@ -217,46 +225,125 @@ void get_median(int l, int r, int p, MPI_Comm comm){
     // print_point(proj, 9);  
 
     // Partições segundos os pivots
-    pivots[0] = partition(pivots[0], 0, r);
-    int sum = pivots[0];
+    send_counts[0] = partition(pivots[0], 0, r);
+    int sum = send_counts[0];
     for(int i = 1; i < p-1; i++) {
-        pivots[i] = partition(pivots[i], (int)pivots[i-1]+1, r) - pivots[i-1];
-        sum += pivots[i];
+        send_counts[i] = partition(pivots[i], (int)send_counts[i-1]+1, r) - send_counts[i-1];
+        sum += send_counts[i];
     }
-    pivots[p-1] = r - sum;
+    send_counts[p-1] = r - sum;
 
-    printf("id: %d, pivots[0]: %f, pivots[1]: %f, pivots[2]: %f\n", id, pivots[0], pivots[1], pivots[2]);
+    printf("id: %d, send_counts[0]: %d, send_counts[1]: %d, send_counts[2]: %d\n", id, send_counts[0], send_counts[1], send_counts[2]);
     fflush(stdout);
+
     // print_point(proj, 9);    
 
     // Array of sizes
-    MPI_Alltoall(pivots, 1, MPI_DOUBLE, glob_pivots, 1, MPI_DOUBLE, comm);
+    MPI_Alltoall(send_counts, 1, MPI_INT, recv_counts, 1, MPI_INT, comm);
 
-    print_point(glob_pivots, 3);
+    printf("id: %d, recv_counts[0]: %d, recv_counts[1]: %d, recv_counts[2]: %d\n", id, recv_counts[0], recv_counts[1], recv_counts[2]);
 
     int sum1 = 0;
     int sum2 = 0;
     for(int i = 0; i < p; i++) {
         send_displs[i] = sum2;
         recv_displs[i] = sum1;
-        sum1 += glob_pivots[i];
-        sum2 += pivots[i];
+        sum1 += recv_counts[i];
+        sum2 += send_counts[i];
     }
 
-    printf("id: %d, sum: %d\n", id, sum);
+    printf("id: %d, sum: %d\n", id, sum1);
 
-    // Fazer free disto to fim desta função
-    if (sum > aux) {
-        p_aux_2 = (double *)malloc(n_dims * (sum-aux) * sizeof(double));
-        pt_arr_2 = (double **)malloc((sum-aux) * sizeof(double *));
-        for (long i = 0; i < sum-aux; i++)
-            pt_arr_2[i] = &p_aux_2[i * n_dims];
-        proj_2 = (double *) malloc ((sum-aux) * sizeof(double));
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // exit(0);
+
+    printf("id: %d, recv_displs[0]: %d, recv_displs[1]: %d, recv_displs[2]: %d\n", id, recv_displs[0], recv_displs[1], recv_displs[2]);
+    printf("id: %d, send_displs[0]: %d, send_displs[1]: %d, send_displs[2]: %d\n", id, send_displs[0], send_displs[1], send_displs[2]);
+
+    printf("aux: %d\n", aux);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    //Fazer free disto to fim desta função
+    // if (sum1 > aux) {
+    //     p_aux_2 = (double *)malloc(n_dims * (sum1-aux) * sizeof(double));
+    //     pt_arr_2 = (double **)malloc((sum1-aux) * sizeof(double *));
+    //     for (long i = 0; i < sum1-aux; i++)
+    //         pt_arr_2[i] = &p_aux_2[i * n_dims];
+    //     proj_2 = (double *) malloc ((sum1-aux) * sizeof(double));
+    // }
+
+    MPI_Alltoallv(proj, send_counts, send_displs, MPI_DOUBLE, recv_buffer, recv_counts, recv_displs, MPI_DOUBLE, comm);
+    print_point(recv_buffer, sum1); 
+
+    free(proj);
+    proj = recv_buffer;
+
+    for(int i = 0; i < p; ++i){
+        send_counts[i] *= n_dims;
+        send_displs[i] *= n_dims;
+        recv_counts[i] *= n_dims;
+        recv_displs[i] *= n_dims;
     }
-    else {
-        MPI_Alltoallv(proj, pivots, send_displs, MPI_DOUBLE, proj, glob_pivots, recv_displs, MPI_DOUBLE, comm);
-   
+
+    printf("id: %d, recv_displs[0]: %d, recv_displs[1]: %d, recv_displs[2]: %d\n", id, recv_displs[0], recv_displs[1], recv_displs[2]);
+    printf("id: %d, send_displs[0]: %d, send_displs[1]: %d, send_displs[2]: %d\n", id, send_displs[0], send_displs[1], send_displs[2]);
+    printf("id: %d, recv_counts[0]: %d, recv_counts[1]: %d, recv_counts[2]: %d\n", id, recv_counts[0], recv_counts[1], recv_counts[2]);
+    printf("id: %d, send_counts[0]: %d, send_counts[1]: %d, send_counts[2]: %d\n", id, send_counts[0], send_counts[1], send_counts[2]);
+
+    // for (int i = 0; i < BLOCK_SIZE(i,p,np); i++)
+    //     print_point(pt_arr[i], n_dims);
+
+    MPI_Alltoallv(p_aux, send_counts, send_displs, MPI_DOUBLE, p_aux_3, recv_counts, recv_displs, MPI_DOUBLE, comm);
+    for (long i = 0; i < sum1; i++)
+        pt_arr[i] = &p_aux_3[i * n_dims];
+    for (int i = 0; i < sum1; i++)
+        print_point(p_aux_3+i*n_dims, n_dims);
+
+    int size = (id < p/2 + (p%2)) ? sum1 : 0;
+    int total_size = 0;
+    MPI_Allreduce(&size, &total_size, 1, MPI_INT, MPI_SUM, comm);
+
+    printf("t_size: %d\n", total_size);
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // exit(0);
+
+    int m1 = -1, m2 = -1;
+
+    if (id == p/2) {
+        int min_proj;
+        if (p%2 == 1) {
+            m1 = quickselect_seq((np)/2-(total_size-sum1), 0, sum1);
+            printf("id: %d, (np)/2-(total_size-sum1): %ld\n", id, (np)/2-(total_size-sum1));
+            if (np%2 == 0) {
+                min_proj = proj[m1+1];
+                for (int i = m1+1; i < r; i++)
+                    if (proj[i] < min_proj) {
+                        min_proj = proj[i];
+                        m2 = i;
+                    }
+                swap(m2, m1+1);
+            }
+            if (m2 == -1) {
+                // Enviar de m1 a r para a direita
+                MPI_Send(proj+m1, sum1-m1, MPI_DOUBLE, id+1, 0, comm);
+                sum1 = m1;
+            }
+            else {
+                // Enviar de m2 a r para a direita
+                MPI_Send(proj+m2, sum1-m2, MPI_DOUBLE, id+1, 0, comm);
+                sum1 = m2;
+            }
+        } 
+        printf("id: %d, m1: %d, m2: %d, proj[m1]: %f\n", id, m1, m2, proj[m1]);
     }
+    else if (id == p/2+1) {
+        MPI_Recv(proj+sum1, total_size-(np/2), MPI_DOUBLE, id-1, 0, comm, MPI_STATUS_IGNORE);        
+        sum1 += total_size-(np/2);
+    }
+
+    print_point(proj, sum1); 
 
     MPI_Barrier(MPI_COMM_WORLD);
     exit(0);
@@ -278,9 +365,8 @@ int main(int argc, char **argv) {
     unsigned seed = atoi(argv[3]);
     srandom(seed);
 
-    float extra = 5/4;
-    aux = ceil(np/p) * extra;
-    double * p_aux = (double *)malloc(n_dims * aux * sizeof(double));
+    aux = ceil(np/p) * 5/4;
+    p_aux = (double *)malloc(n_dims * aux * sizeof(double));
     pt_arr = (double **)malloc(aux * sizeof(double *));
     for (long i = 0; i < aux; i++)
         pt_arr[i] = &p_aux[i * n_dims];
@@ -292,6 +378,10 @@ int main(int argc, char **argv) {
     proj = (double *) malloc (aux * sizeof(double));
     send_displs = (int *) malloc (p * sizeof(int));
     recv_displs = (int *) malloc (p * sizeof(int));
+    send_counts = (int *) malloc (p * sizeof(int));
+    recv_counts = (int *) malloc (p * sizeof(int));
+    recv_buffer = (double *) malloc (aux * sizeof(double));
+    p_aux_3 = (double *)malloc(n_dims * aux * sizeof(double));
 
     if (!id) {
         proj[0] = 15;
@@ -353,6 +443,8 @@ int main(int argc, char **argv) {
     free(pivots);
     free(glob_pivots);
     free(proj);
+    free(send_counts);
+    free(recv_counts);
     free(send_displs);
     free(recv_displs);
     free(pt_arr[0]);
