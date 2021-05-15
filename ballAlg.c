@@ -14,16 +14,26 @@ struct reduce_i_i {
     int p_id; 
 } in_min, out_min;
 
+typedef struct tree_node {
+    int center_idx;
+    double radius;
+    long left;
+    long right;
+    long node_id;
+} node;
+
 long n_dims;
 long np;
 int p;
 int p_initial;
 int id;
 int id_initial;
+int new_id;
 int aux;
 double * p_aux;
 double ** pt_arr;
 int * block_size;
+int * branch_size;
 long * idx_global;
 double * pt_arr_idx0;
 double * pt_arr_a;
@@ -36,10 +46,13 @@ int * recv_displs;
 int * send_counts;
 int * recv_counts;
 double * recv_buffer;
+long * recv_buffer_long;
 double * p_aux_2;
 double * center;
 double **centers;
 long n_center = 0;
+long tree_counter = 0;
+node * tree;
 
 #define RANGE 10
 #define BLOCK_LOW(id,p,np) ((id)*(np)/(p))
@@ -83,9 +96,9 @@ int partition(double pivot, int l, int r) {
 
     if (r == l + 1) {
         if (proj[l] <= pivot)
-            return 1;
+            return l+1;
         else
-            return 0;
+            return l;
     }
 
     int i = l-1;
@@ -181,34 +194,34 @@ int quickselect_seq(int k, int l, int h) {
     }
 }
 
-double orth_projv1(double *a, double *b, double *p) {
+double orth_projv1(double *a, double *b, double *pt) {
     double proj = 0.0;
     for (int i = 0; i < n_dims; ++i)
-        proj += (p[i] - a[i]) * (b[i] - a[i]);
+        proj += (pt[i] - a[i]) * (b[i] - a[i]);
     return proj;
 }
 
-void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
+void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
 
-    if (!id) {
-
-        if (block_size[id_initial] == 1) {
-            // Não sei o que fazer no center_idx
-            // tree[tree_counter].center_idx = ;
-            // tree[tree_counter].radius = 0;
-            // tree[tree_counter].left = -1;
-            // tree[tree_counter].right = -1;
-            // tree[tree_counter].node_id = tree_id;
-            // tree_counter++;
-            return;
-        }
-    }
+    // if (!id) {
+    //     if (block_size[id_initial] == 1) {
+    //         tree[tree_counter].center_idx = ;
+    //         tree[tree_counter].radius = 0;
+    //         tree[tree_counter].left = -1;
+    //         tree[tree_counter].right = -1;
+    //         tree[tree_counter].node_id = tree_id;
+    //         tree_counter++;
+    //         return;
+    //     }
+    // }
 
     in_min.idx0 = idx_global[0];
-    for (int i = 0; i < block_size[id_initial]; i++) {
+    in_min.p_id = id;
+    int local;
+    for (int i = 1; i < block_size[id_initial]; i++) {
         if (idx_global[i] < in_min.idx0) {
             in_min.idx0 = idx_global[i];
-            in_min.p_id = id;
+            local = i;
         }
     }
 
@@ -219,7 +232,7 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         // fflush(stdout);
         // print_point(pt_arr[out_min.idx0], n_dims);
         for (int i = 0; i < n_dims; i++) {
-            pt_arr_idx0[i] = pt_arr[out_min.idx0][i];
+            pt_arr_idx0[i] = pt_arr[local][i];
         }
     }
 
@@ -232,12 +245,11 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
     double d;
     int a;
     in_max.max_d = 0;
-    in_max.p_id = -1;
+    in_max.p_id = id;
     for (int i = 0; i < block_size[id_initial]; ++i) {
         d = dist(pt_arr_idx0, pt_arr[i]);
         if (d > in_max.max_d) {
             in_max.max_d = d;
-            in_max.p_id = id;
             a = i;
         }
     }
@@ -261,12 +273,11 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
 
     int b;
     in_max.max_d = 0;
-    in_max.p_id = -1;
+    in_max.p_id = id;
     for (int i = 0; i < block_size[id_initial]; ++i) {
         d = dist(pt_arr_a, pt_arr[i]);
         if (d > in_max.max_d) {
             in_max.max_d = d;
-            in_max.p_id = id;
             b = i;
         }
     }
@@ -292,14 +303,21 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         double temp;
         for (int i = 0; i < n_dims; i++) {
             temp = pt_arr_a[i];
-            pt_arr_a[i] = pt_arr_a[i];
-            pt_arr_b[i] = pt_arr_a[i];
+            pt_arr_a[i] = pt_arr_b[i];
+            pt_arr_b[i] = temp;
         }
     }
 
     for (int i = 0; i < block_size[id_initial]; ++i) {
         proj[i] = orth_projv1(pt_arr_a, pt_arr_b, pt_arr[i]);
     }
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // for (int i = 0; i < block_size[id_initial]; i++) {
+    //     printf("id: %d, i: %d, idx_global[i]: %ld, proj[i]: %f, pt_arr[i][0]: %f, pt_arr[i][1]: %f\n", id, i, idx_global[i], proj[i], pt_arr[i][0], pt_arr[i][1]);
+    //     fflush(stdout);
+    // }
+    // MPI_Barrier(MPI_COMM_WORLD);
 
     int min_index = 0;
     for(int i = 0; i < block_size[id_initial]; ++i) {
@@ -319,13 +337,20 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         pivots[i] = proj[temp_idx];
     }
 
+    // MPI_Barrier(MPI_COMM_WORLD);
     // printf("id: %d ", id);
     // print_point(pivots, p);
+    // MPI_Barrier(MPI_COMM_WORLD);
 
     MPI_Gather(pivots, p, MPI_DOUBLE, glob_pivots, p, MPI_DOUBLE, 0, comm);
 
-    // printf("id: %d ", id);
-    // print_point(glob_pivots, p*p);
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // if (!id) {
+    //     printf("id: %d ", id);
+    //     fflush(stdout);
+    //     print_point(glob_pivots, p*p);        
+    // }
+    // MPI_Barrier(MPI_COMM_WORLD);
 
     if(!id){
         prev_piv_idx = -1;
@@ -338,13 +363,30 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
 
     MPI_Bcast(pivots, p-1, MPI_DOUBLE, 0, comm);
 
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // printf("id: %d ", id);
+    // print_point(pivots, p-1);
+    // MPI_Barrier(MPI_COMM_WORLD);
+
     send_counts[0] = partition(pivots[0], 0, block_size[id_initial]);
     int sum = send_counts[0];
     for(int i = 1; i < p-1; i++) {
         send_counts[i] = partition(pivots[i], sum, block_size[id_initial]) - sum;
+        // MPI_Barrier(MPI_COMM_WORLD);
+        // printf("id: %d, i: %d, send_counts[i]: %d\n", id, i, send_counts[i]);
+        // MPI_Barrier(MPI_COMM_WORLD);
         sum += send_counts[i];
     }
     send_counts[p-1] = block_size[id_initial] - sum;
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // printf("id: %d ", id);
+    // print_point(proj, block_size[id]);
+    // MPI_Barrier(MPI_COMM_WORLD);
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // printf("id: %d, send_counts[0]: %d, send_counts[1]: %d, send_counts[2]: %d, send_counts[3]: %d\n", id, send_counts[0], send_counts[1], send_counts[2], send_counts[3]);
+    // MPI_Barrier(MPI_COMM_WORLD);
 
     MPI_Alltoall(send_counts, 1, MPI_INT, recv_counts, 1, MPI_INT, comm);
 
@@ -357,18 +399,20 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         sum2 += send_counts[i];
     }
 
-    // Rever a partir daqui - soma a 0
-
     printf("id: %d, sum1: %d\n", id, sum1);
     fflush(stdout);
 
-    MPI_Barrier(comm);
-    exit(0);
-
     MPI_Alltoallv(proj, send_counts, send_displs, MPI_DOUBLE, recv_buffer, recv_counts, recv_displs, MPI_DOUBLE, comm);
 
-    free(proj);
+    double * temp = proj;
     proj = recv_buffer;
+    recv_buffer = temp;
+
+    MPI_Alltoallv(idx_global, send_counts, send_displs, MPI_LONG, recv_buffer_long, recv_counts, recv_displs, MPI_LONG, comm);
+
+    long * temp_long = idx_global;
+    idx_global = recv_buffer_long;
+    recv_buffer_long = temp_long;
     
     for(int i = 0; i < p; ++i){
         send_counts[i] *= n_dims;
@@ -379,30 +423,62 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
 
     MPI_Alltoallv(p_aux, send_counts, send_displs, MPI_DOUBLE, p_aux_2, recv_counts, recv_displs, MPI_DOUBLE, comm);
 
-    for (long i = 0; i < sum1; i++)
-        pt_arr[i] = &p_aux_2[i * n_dims];
+    // for (int i = 0; i < sum1*n_dims; i++) {
+    //     // double t = p_aux_2[i];
+    //     printf("p_aux_2[i]: %f\n", p_aux_2[i]);
+    //     fflush(stdout);
+    // }
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // exit(0);
+
+    temp = p_aux;
+    p_aux = p_aux_2;
+    p_aux_2 = temp;
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // exit(0);
+
+    // for (long i = 0; i < aux; i++)
+    //     pt_arr[i] = &p_aux[i * n_dims];
+
+    for (long i = 0; i < aux; i++)
+        for (int j = 0; j < n_dims; j++)
+            pt_arr[i][j] = p_aux[i*n_dims+j];
 
     int size = (id < p/2 + (p%2)) ? sum1 : 0;
     int total_size = 0;
 
-    printf("id: %d, size: %d, total_size: %d\n", id, size, total_size);
-    fflush(stdout);
-
     MPI_Allreduce(&size, &total_size, 1, MPI_INT, MPI_SUM, comm);
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    exit(0);
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // printf("id: %d ", id);
+    // print_point(proj, sum1);
+    // MPI_Barrier(MPI_COMM_WORLD);
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    printf("id: %d, size: %d, total_size: %d\n", id, size, total_size);
+    fflush(stdout);
+    // MPI_Barrier(MPI_COMM_WORLD);
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // if(id == 2) {
+    //     for (int i = 0; i < sum1; i++) {
+    //         printf("id: %d, i: %d, pt_arr[i][0]: %f, pt_arr[i][1]: %f\n", id, i, pt_arr[i][0], pt_arr[i][1]);
+    //         fflush(stdout);
+    //     }        
+    // }
+    // MPI_Barrier(MPI_COMM_WORLD);
 
     int m1 = -1, m2 = -1;
     int min_proj;
     double u;
     if ((id == p/2) && (p%2 == 1)) {
-        m1 = quickselect_seq(np/2-!(np%2)-(total_size-sum1), 0, sum1);
-        // printf("id: %d, (np)/2-(total_size-sum1): %ld\n", id, np/2-!(np%2)-(total_size-sum1));
-        if (np%2 == 0) {
+        m1 = quickselect_seq(n_points/2-!(n_points%2)-(total_size-sum1), 0, sum1);
+        if (n_points%2 == 0) {
             min_proj = proj[m1+1];
             m2 = m1+1;
-            for (int i = m1+1; block_size[id_initial]; i++)
+            for (int i = m1+1; i < sum1; i++)
                 if (proj[i] < min_proj) {
                     min_proj = proj[i];
                     m2 = i;
@@ -410,83 +486,101 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
             swap(m2, m1+1);
             u = (proj[m1] + proj[m1+1])/2;
             MPI_Send(proj+m1+1, sum1-(m1+1), MPI_DOUBLE, id+1, 0, comm);
-            MPI_Send(p_aux_2+(m1+1)*n_dims, (sum1-(m1+1))*n_dims, MPI_DOUBLE, id+1, 1, comm);
+            MPI_Send(p_aux+(m1+1)*n_dims, (sum1-(m1+1))*n_dims, MPI_DOUBLE, id+1, 1, comm);
+            MPI_Send(idx_global+m1+1, sum1-(m1+1), MPI_LONG, id+1, 2, comm);
             sum1 = m1+1;
         }
         else {
             u = proj[m1];
-            // printf("id: %d, u: %f\n", id, u);
-            // fflush(stoutd);
             MPI_Send(proj+m1, sum1-m1, MPI_DOUBLE, id+1, 0, comm);
-            MPI_Send(p_aux_2+m1*n_dims, (sum1-m1)*n_dims, MPI_DOUBLE, id+1, 1, comm);
+            MPI_Send(p_aux+m1*n_dims, (sum1-m1)*n_dims, MPI_DOUBLE, id+1, 1, comm);
+            MPI_Send(idx_global+m1, sum1-m1, MPI_LONG, id+1, 2, comm);
             sum1 = m1;
         }
-        // printf("id: %d, m1: %d, m2: %d, proj[m1]: %f\n", id, m1, m2, proj[m1]);
     }
     else if ((id == p/2+1) && (p%2 == 1)) {
         u = 0;
-        MPI_Recv(proj+sum1, total_size-(np/2), MPI_DOUBLE, id-1, 0, comm, MPI_STATUS_IGNORE);        
-        MPI_Recv(p_aux_2+sum1*n_dims, (total_size-(np/2))*n_dims, MPI_DOUBLE, id-1, 1, comm, MPI_STATUS_IGNORE);
-        sum1 += total_size-(np/2);
-        for (long i = 0; i < sum1; i++) {
-            pt_arr[i] = &p_aux_2[i * n_dims];
-        }
+        MPI_Recv(proj+sum1, total_size-(n_points/2), MPI_DOUBLE, id-1, 0, comm, MPI_STATUS_IGNORE);        
+        MPI_Recv(p_aux+sum1*n_dims, (total_size-(n_points/2))*n_dims, MPI_DOUBLE, id-1, 1, comm, MPI_STATUS_IGNORE);
+        MPI_Recv(idx_global+sum1, total_size-(n_points/2), MPI_LONG, id-1, 2, comm, MPI_STATUS_IGNORE);
+        // for (long i = 0; i < total_size-(n_points/2); i++) {
+        //     pt_arr[i+sum1] = &p_aux[(i+sum1) * n_dims];
+        // }
+        for (long i = 0; i < total_size-(n_points/2); i++)
+            for (int j = 0; j < n_dims; j++)
+                pt_arr[i+sum1][j] = p_aux[(i+sum1)*n_dims+j];
+        sum1 += total_size-(n_points/2);
     }
-    else if ((np%2 == 1) && (p%2 == 0)) {
+    else if ((n_points%2 == 1) && (p%2 == 0)) {
         if (id == p/2 - 1) {
-            if (total_size >= np/2) {
-                m1 = quickselect_seq((np)/2-(total_size-sum1), 0, sum1);
+            if (total_size >= n_points/2) {
+                m1 = quickselect_seq((n_points)/2-(total_size-sum1), 0, sum1);
                 u = proj[m1];
                 MPI_Send(proj+m1, sum1-m1, MPI_DOUBLE, id+1, 0, comm);
-                MPI_Send(p_aux_2+m1*n_dims, (sum1-m1)*n_dims, MPI_DOUBLE, id+1, 1, comm);
+                MPI_Send(p_aux+m1*n_dims, (sum1-m1)*n_dims, MPI_DOUBLE, id+1, 1, comm);
+                MPI_Send(idx_global+m1, sum1-m1, MPI_LONG, id+1, 2, comm);
                 sum1 = m1;
             }
             else {
                 u = 0;
-                fflush(stdout);
-                MPI_Recv(proj+sum1, (np/2)-total_size, MPI_DOUBLE, id+1, 0, comm, MPI_STATUS_IGNORE);        
-                MPI_Recv(p_aux_2+sum1*n_dims, ((np/2)-total_size)*n_dims, MPI_DOUBLE, id-1, 1, comm, MPI_STATUS_IGNORE);
-                sum1 += (np/2)-total_size;
-                for (long i = 0; i < sum1; i++) {
-                    pt_arr[i] = &p_aux_2[i * n_dims];
-                }
+                MPI_Recv(proj+sum1, (n_points/2)-total_size, MPI_DOUBLE, id+1, 0, comm, MPI_STATUS_IGNORE);        
+                MPI_Recv(p_aux+sum1*n_dims, ((n_points/2)-total_size)*n_dims, MPI_DOUBLE, id+1, 1, comm, MPI_STATUS_IGNORE);
+                MPI_Recv(idx_global+sum1, (n_points/2)-total_size, MPI_LONG, id+1, 2, comm, MPI_STATUS_IGNORE);        
+                // for (long i = 0; i < (n_points/2)-total_size; i++) {
+                //     pt_arr[i+sum1] = &p_aux[(i+sum1) * n_dims];
+                // }
+                for (long i = 0; i < (n_points/2)-total_size; i++)
+                    for (int j = 0; j < n_dims; j++)
+                        pt_arr[i+sum1][j] = p_aux[(i+sum1)*n_dims+j];
+                sum1 += (n_points/2)-total_size;
+                // for (int i = 0; i < sum1; i++) {
+                //     printf("id: %d, i: %d, pt_arr[i][0]: %f, pt_arr[i][1]: %f\n", id, i, pt_arr[i][0], pt_arr[i][1]);
+                //     fflush(stdout);
+                // }
             }
         }
         else if (id == p/2) {
-            if (total_size < np/2) {
-                m1 = quickselect_seq((np)/2-(total_size), 0, sum1);
+            if (total_size < n_points/2) {
+                m1 = quickselect_seq((n_points)/2-(total_size), 0, sum1);
                 u = proj[m1];
                 MPI_Send(proj, m1, MPI_DOUBLE, id-1, 0, comm);
-                MPI_Send(p_aux_2, m1*n_dims, MPI_DOUBLE, id-1, 1, comm);
+                MPI_Send(p_aux, m1*n_dims, MPI_DOUBLE, id-1, 1, comm);
+                MPI_Send(idx_global, m1, MPI_LONG, id-1, 2, comm);
                 sum1 = sum1-m1;
                 for (int i = 0; i < sum1; i++) {
-                    proj[i] = proj[i+m1+1];
-                    // pt_arr[i] = &p_aux_2[(i+m1+1) * n_dims];
-                    pt_arr[i] = pt_arr[i+m1+1];
+                    proj[i] = proj[i+m1];
+                    idx_global[i] = idx_global[i+m1];
+                    for (int j = 0; j < n_dims; j++) {
+                        pt_arr[i][j] = pt_arr[i+m1][j];
+                    }
                 }
             }
             else {
                 u = 0;
-                MPI_Recv(proj+sum1, total_size-(np/2), MPI_DOUBLE, id+1, 0, comm, MPI_STATUS_IGNORE);        
-                MPI_Recv(p_aux_2+sum1*n_dims, (total_size-(np/2))*n_dims, MPI_DOUBLE, id+1, 1, comm, MPI_STATUS_IGNORE);
-                sum1 += total_size-(np/2);
-                for (long i = 0; i < sum1; i++) {
-                    pt_arr[i] = &p_aux_2[i * n_dims];
-                }
+                MPI_Recv(proj+sum1, total_size-(n_points/2), MPI_DOUBLE, id-1, 0, comm, MPI_STATUS_IGNORE);        
+                MPI_Recv(p_aux+sum1*n_dims, (total_size-(n_points/2))*n_dims, MPI_DOUBLE, id-1, 1, comm, MPI_STATUS_IGNORE);
+                MPI_Recv(idx_global+sum1, total_size-(n_points/2), MPI_LONG, id-1, 2, comm, MPI_STATUS_IGNORE);        
+                // for (long i = 0; i < total_size-(n_points/2); i++) {
+                //     pt_arr[i] = &p_aux[(i+sum1) * n_dims];
+                // }
+                for (long i = 0; i < (total_size-(n_points/2)); i++)
+                    for (int j = 0; j < n_dims; j++)
+                        pt_arr[i+sum1][j] = p_aux[(i+sum1)*n_dims+j];
+                sum1 += total_size-(n_points/2);
             }
         }
         else {
             u = 0;
         }
     }
-    else if ((np%2 == 0) && (p%2 == 0)) {
+    else if ((n_points%2 == 0) && (p%2 == 0)) {
         if (id == p/2 - 1) {
-            if (total_size >= np/2) {
-                m1 = quickselect_seq((np)/2-1-(total_size-sum1), 0, sum1);
-                if (total_size != np/2) {
+            if (total_size >= n_points/2) {
+                m1 = quickselect_seq((n_points)/2-1-(total_size-sum1), 0, sum1);
+                if (total_size != n_points/2) {
                     min_proj = proj[m1+1];
                     m2 = m1+1;
-                    for (int i = m1+1; i < block_size[id_initial]; i++)
+                    for (int i = m1+1; i < sum1; i++)
                         if (proj[i] < min_proj) {
                             min_proj = proj[i];
                             m2 = i;
@@ -494,7 +588,8 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
                     swap(m2, m1+1);
                     u = (proj[m1]+proj[m1+1])/2;
                     MPI_Send(proj+m2, sum1-m2, MPI_DOUBLE, id+1, 0, comm);
-                    MPI_Send(p_aux_2+m2*n_dims, (sum1-m2)*n_dims, MPI_DOUBLE, id+1, 1, comm);
+                    MPI_Send(p_aux+m2*n_dims, (sum1-m2)*n_dims, MPI_DOUBLE, id+1, 1, comm);
+                    MPI_Send(idx_global+m2, sum1-m2, MPI_LONG, id+1, 2, comm);
                     sum1 = sum1-m2;
                 }
                 else {
@@ -503,20 +598,24 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
             }
             else {
                 u = 0;
-                MPI_Recv(proj+sum1, (np/2)-total_size, MPI_DOUBLE, id+1, 0, comm, MPI_STATUS_IGNORE);        
-                MPI_Recv(p_aux_2+sum1*n_dims, ((np/2)-total_size)*n_dims, MPI_DOUBLE, id+1, 1, comm, MPI_STATUS_IGNORE);
-                sum1 += (np/2)-total_size;
-                for (long i = 0; i < sum1; i++) {
-                    pt_arr[i] = &p_aux_2[i * n_dims];
-                }
+                MPI_Recv(proj+sum1, (n_points/2)-total_size, MPI_DOUBLE, id+1, 0, comm, MPI_STATUS_IGNORE);        
+                MPI_Recv(p_aux+sum1*n_dims, ((n_points/2)-total_size)*n_dims, MPI_DOUBLE, id+1, 1, comm, MPI_STATUS_IGNORE);
+                MPI_Recv(idx_global+sum1, (n_points/2)-total_size, MPI_LONG, id+1, 2, comm, MPI_STATUS_IGNORE);        
+                // for (long i = 0; i < (n_points/2)-total_size; i++) {
+                //     pt_arr[i+sum1] = &p_aux[(i+sum1) * n_dims];
+                // }
+                for (long i = 0; i < ((n_points/2)-total_size); i++)
+                    for (int j = 0; j < n_dims; j++)
+                        pt_arr[i+sum1][j] = p_aux[(i+sum1)*n_dims+j];
+                sum1 += (n_points/2)-total_size;
             }
         }
         else if (id == p/2) {
-            if (total_size < np/2) {
-                m1 = quickselect_seq(np/2-1-total_size, 0, sum1);
+            if (total_size < n_points/2) {
+                m1 = quickselect_seq(n_points/2-1-total_size, 0, sum1);
                 min_proj = proj[m1+1];
                 m2 = m1+1;
-                for (int i = m1+1; i < block_size[id_initial]; i++)
+                for (int i = m1+1; i < sum1; i++)
                     if (proj[i] < min_proj) {
                         min_proj = proj[i];
                         m2 = i;
@@ -524,19 +623,22 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
                 swap(m2, m1+1);
                 u = (proj[m1]+proj[m1+1])/2;
                 MPI_Send(proj, m1+1, MPI_DOUBLE, id-1, 0, comm);
-                MPI_Send(p_aux_2, (m1+1)*n_dims, MPI_DOUBLE, id-1, 1, comm);
+                MPI_Send(p_aux, (m1+1)*n_dims, MPI_DOUBLE, id-1, 1, comm);
+                MPI_Send(idx_global, m1+1, MPI_LONG, id-1, 2, comm);
                 sum1 = sum1-(m1+1);
                 for (int i = 0; i < sum1; i++) {
                     proj[i] = proj[i+m1+1];
-                    // pt_arr[i] = &p_aux_2[(i+m1+1) * n_dims];
-                    pt_arr[i] = pt_arr[i+m1+1];
+                    idx_global[i] = idx_global[i+m1+1];
+                    for (int j = 0; j < n_dims; j++) {
+                        pt_arr[i][j] = pt_arr[i+m1+1][j];
+                    }
                 }
             }
-            else if (total_size == np/2) {
+            else if (total_size == n_points/2) {
                 m1 = -1;
                 min_proj = proj[m1+1];
                 m2 = m1+1;
-                for (int i = m1+1; i < block_size[id_initial]; i++)
+                for (int i = m1+1; i < sum1; i++)
                     if (proj[i] < min_proj) {
                         min_proj = proj[i];
                         m2 = i;
@@ -546,12 +648,16 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
             }
             else {
                 u = 0;
-                MPI_Recv(proj+sum1, total_size-(np/2), MPI_DOUBLE, id-1, 0, comm, MPI_STATUS_IGNORE);        
-                MPI_Recv(p_aux_2+sum1*n_dims, (total_size-(np/2))*n_dims, MPI_DOUBLE, id-1, 1, comm, MPI_STATUS_IGNORE);
-                sum1 += total_size-(np/2);
-                for (long i = 0; i < sum1; i++) {
-                    pt_arr[i] = &p_aux_2[i * n_dims];
-                }
+                MPI_Recv(proj+sum1, total_size-(n_points/2), MPI_DOUBLE, id-1, 0, comm, MPI_STATUS_IGNORE);        
+                MPI_Recv(p_aux+sum1*n_dims, (total_size-(n_points/2))*n_dims, MPI_DOUBLE, id-1, 1, comm, MPI_STATUS_IGNORE);
+                MPI_Recv(idx_global+sum1, total_size-(n_points/2), MPI_LONG, id-1, 2, comm, MPI_STATUS_IGNORE);        
+                // for (long i = 0; i < total_size-(n_points/2); i++) {
+                //     pt_arr[i+sum1] = &p_aux[(i+sum1) * n_dims];
+                // }
+                for (long i = 0; i < total_size-(n_points/2); i++)
+                    for (int j = 0; j < n_dims; j++)
+                        pt_arr[i+sum1][j] = p_aux[(i+sum1)*n_dims+j];
+                sum1 += total_size-(n_points/2);
             }
         }
     }
@@ -561,9 +667,28 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
 
     block_size[id_initial] = sum1;
 
+    printf("id: %d, sum1: %d\n", id, sum1);
+    fflush(stdout);
+
+    // if (id == 2)
+    //     for (int i = 0; i < block_size[id_initial]; i++) {
+    //         printf("id: %d, i: %d, idx_global[i]: %ld, proj[i]: %f, pt_arr[i][0]: %f, pt_arr[i][1]: %f\n", id, i, idx_global[i], proj[i], pt_arr[i][0], pt_arr[i][1]);
+    //         fflush(stdout);
+    //     }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    printf("id: %d, u: %f, pt_arr_a[0]: %f, pt_arr_a[1]: %f, pt_arr_b[0]: %f, pt_arr_b[1]: %f\n", id, u, pt_arr_a[0], pt_arr_a[1], pt_arr_b[0], pt_arr_b[1]);
+    fflush(stdout);
+    MPI_Barrier(MPI_COMM_WORLD);
+
     double u_aux;
     MPI_Allreduce(&u, &u_aux, 1, MPI_DOUBLE, MPI_SUM, comm);
     u = u_aux;
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    printf("id: %d, u: %f\n", id, u);
+    fflush(stdout);
+    MPI_Barrier(MPI_COMM_WORLD);
 
     double abnorm = 0.0;
     for (int i = 0; i < n_dims; ++i) {
@@ -579,16 +704,108 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
     double max_d = 0;
     for (int i = 0; i < block_size[id_initial]; i++) {
         d = dist(center, pt_arr[i]);
-        if (d > max_d)
+        if (d > max_d) {
             max_d = d;
+            // printf("id: %d, idx_global[i], : %ld, max_d: %f, pt_arr[i][0]: %f, pt_arr[i][1]: %f\n", id, idx_global[i], max_d, pt_arr[i][0], pt_arr[i][1]);
+            // fflush(stdout);
+        }
     }
 
     double rad = 0;
-   
+
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // printf("Before - id: %d, max_d: %f\n", id, max_d);
+    // fflush(stdout);
+    // MPI_Barrier(MPI_COMM_WORLD);
+
     MPI_Reduce(&max_d, &rad, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    exit(0);
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // printf("After - id: %d, max_d: %f, rad: %f\n", id, max_d, rad);
+    // fflush(stdout);
+    // MPI_Barrier(MPI_COMM_WORLD);
+
+    long left;
+    long right;
+
+    // printf("%d\n", (int)(log(p_initial)/log(2)-1));
+
+    if (lvl == log(p_initial)/log(2)-1) {
+        branch_size[0] = 2 * block_size[0] - 1;
+        for (int i = 1; i < p; i++) {
+            branch_size[i] = 2 * block_size[i] - 1 + branch_size[i-1];
+        }
+        int first_id = pow(2, lvl+1) - 1;
+        if (id_initial < 2) {
+            left = first_id;
+            right = first_id + branch_size[0];
+        }
+        else if (id == 0){
+            left = first_id + branch_size[id_initial-1];
+            right = first_id + branch_size[id_initial];
+        }
+        else {
+            // left = first_id + branch_size[id_initial-2];
+            right = first_id + branch_size[id_initial-1];
+        }
+    }
+    else {
+        left = 2 * tree_id + 1;
+        right = 2 * tree_id + 2;    
+    }
+
+    if (!id) {
+
+        tree[tree_counter].node_id = tree_id;
+        tree[tree_counter].center_idx = n_center;
+        tree[tree_counter].radius = sqrt(rad);
+        tree[tree_counter].left = left;
+        tree[tree_counter].right = right;
+
+        for (int i = 0; i < n_dims; ++i) {
+            centers[n_center][i] = center[i];
+        }
+
+        n_center++;
+
+        printf("%ld %ld %ld %f ", tree_id, tree[tree_counter].left, tree[tree_counter].right, tree[tree_counter].radius);
+        print_point(centers[tree[tree_counter].center_idx], n_dims);
+        fflush(stdout);
+                
+        tree_counter++;
+    }
+
+    if (lvl == 1) {
+        MPI_Barrier(MPI_COMM_WORLD);
+        exit(0);
+    }
+
+    MPI_Comm new_comm;
+
+    MPI_Comm_split(comm, (id+p%2)/(2+p%2), id, &new_comm);
+
+    if (tree_id != 0)
+        MPI_Comm_free(&comm);
+
+    MPI_Comm_rank(new_comm, &new_id);
+    MPI_Comm_size(new_comm, &p);
+
+    if (id/2 < 1) {
+        id = new_id;
+        // if (par_info == 1) {
+            // printf("id: %d, tree_id: %ld, proc: %d\n", id, tree_id, p);
+            // fflush(stdout);
+        // }
+        ballAlg(n_points/2, left, lvl + 1, new_comm);
+    }
+    else {
+        id = new_id;
+        // if (par_info == 1) {
+            // printf("id: %d, tree_id: %ld, proc: %d\n", id, tree_id, p);
+            // fflush(stdout);
+        // }
+        ballAlg(n_points/2+n_points%2, right, lvl + 1, new_comm);
+    }   
     
 }
 
@@ -619,13 +836,14 @@ int main(int argc, char **argv) {
     p_initial = p;
     id_initial = id;
 
-    aux = ceil(np/p) * 5/2;
+    aux = ceil(np/p) * 2;
     p_aux = (double *)malloc(n_dims * aux * sizeof(double));
     pt_arr = (double **)malloc(aux * sizeof(double *));
     for (long i = 0; i < aux; i++)
         pt_arr[i] = &p_aux[i * n_dims];
 
     block_size = (int *) malloc (p * sizeof(int));
+    branch_size = (int *) malloc (p * sizeof(int));
     for (int i = 0; i < p; i++) {
         block_size[i] = BLOCK_SIZE(i,p,np);
         // printf("id: %d, i: %d, block_size[i]: %d\n", id, i, block_size[i]);
@@ -636,9 +854,11 @@ int main(int argc, char **argv) {
 
     int BL = BLOCK_LOW(id, p, np);
     int BH = BLOCK_HIGH(id, p, np);
+    // printf("id: %d, BL: %d, BH: %d, BS: %d\n", id, BL, BH, block_size[id_initial]);
+    // fflush(stdout);
     for (int i = 0; i < np; i++)
         for (int j = 0; j < n_dims; j++) {
-            if (i >= BL && i <= BH) {
+            if ((i >= BL) && (i <= BH)) {
                 pt_arr[i-BL][j] = RANGE * ((double)random()) / RAND_MAX;
             }
             else
@@ -663,22 +883,24 @@ int main(int argc, char **argv) {
     send_counts = (int *) malloc (p * sizeof(int));
     recv_counts = (int *) malloc (p * sizeof(int));
     recv_buffer = (double *) malloc (aux * sizeof(double));
+    recv_buffer_long = (long *) malloc (aux * sizeof(long));
     p_aux_2 = (double *)malloc(n_dims * aux * sizeof(double));
 
-    // Fazer contas para ver quantos centros alocar (eu meti só o tamanho máximo)
-    double *center_aux = (double *)malloc((np - 1) * n_dims * sizeof(double));
-    centers = (double **)malloc((np-1) * sizeof(double *));
-    for (int i = 0; i < np-1; ++i)
+    tree = (node *)malloc((ceil(log(p_initial)/log(2))+(2*aux-1)) * sizeof(node));
+    double *center_aux = (double *)malloc((ceil(log(p_initial)/log(2))+aux-1) * n_dims * sizeof(double));
+    centers = (double **)malloc((ceil(log(p_initial)/log(2))+aux-1) * sizeof(double *));
+    for (int i = 0; i < (ceil(log(p_initial)/log(2))+aux-1); ++i)
         centers[i] = &center_aux[i * n_dims];
     center = (double *) malloc (n_dims * sizeof(double));
 
-    ballAlg(0, 0, MPI_COMM_WORLD);
+    ballAlg(np, 0, 0, MPI_COMM_WORLD);
 
     elapsed_time += MPI_Wtime();
 
     free(p_aux);
     free(pt_arr);
     free(block_size);
+    free(branch_size);
     free(idx_global);
     free(pt_arr_idx0);
     free(pt_arr_a);
@@ -691,7 +913,12 @@ int main(int argc, char **argv) {
     free(send_counts);
     free(recv_counts);
     free(recv_buffer);
+    free(recv_buffer_long);
     free(p_aux_2);
+    free(tree);
+    free(center_aux);
+    free(centers);
+    free(center);
 
     if (!id_initial) {
         fprintf(stderr, "%.1lf\n", elapsed_time);
