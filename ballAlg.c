@@ -46,6 +46,14 @@ long n_center = 0;
 #define BLOCK_HIGH(id,p,np) (BLOCK_LOW((id)+1,p,np)-1)
 #define BLOCK_SIZE(id,p,np) (BLOCK_HIGH(id,p,np)-BLOCK_LOW(id,p,np)+1)
 
+void print_point(double *pt, int dim) {
+    for (int i = 0; i < dim; ++i) {
+        printf("%f ", pt[i]);
+    }
+    printf("\n");
+    fflush(stdout);
+}
+
 void swap(int i, int j) {
     double temp = proj[i];
     proj[i] = proj[j];
@@ -206,13 +214,22 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
 
     MPI_Allreduce(&in_min, &out_min, 1, MPI_2INT, MPI_MINLOC, comm);
 
+    int root_id;
     if (id == out_min.p_id) {
+        root_id = id;
+        // printf("idx0: %d ", out_min.p_id);
+        // fflush(stdout);
+        // print_point(pt_arr[out_min.idx0], n_dims);
         for (int i = 0; i < n_dims; i++) {
             pt_arr_idx0[i] = pt_arr[out_min.idx0][i];
         }
     }
 
-    MPI_Bcast(pt_arr_idx0, n_dims, MPI_DOUBLE, 0, comm);
+    MPI_Bcast(pt_arr_idx0, n_dims, MPI_DOUBLE, root_id, comm);
+
+    // printf("id: %d ", id);
+    // fflush(stdout);
+    // print_point(pt_arr_idx0, n_dims);
 
     double d;
     in_max.max_d = 0;
@@ -225,14 +242,25 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         }
     }
 
+    // Rever a partir daqui - é precio os outros processadores saberem qual é o root
+
     MPI_Allreduce(&in_max, &out_max, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
     
-    if (in_max.max_d == out_max.max_d)    
+    if (in_max.max_d == out_max.max_d) {
+        root_id = id;
         for (int i = 0; i < n_dims; i++) {
             pt_arr_a[i] = pt_arr[out_max.idx][i];
         }
+        printf("id: %d ", id);
+        fflush(stdout);
+        print_point(pt_arr_a, n_dims);
+    }
 
-    MPI_Bcast(pt_arr_a, n_dims, MPI_DOUBLE, 0, comm);
+    MPI_Bcast(pt_arr_a, n_dims, MPI_DOUBLE, root_id, comm);
+
+    printf("id: %d ", id);
+    fflush(stdout);
+    print_point(pt_arr_a, n_dims);
 
     in_max.max_d = 0;
     in_max.idx = -1;
@@ -320,7 +348,7 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
 
     free(proj);
     proj = recv_buffer;
-
+    
     for(int i = 0; i < p; ++i){
         send_counts[i] *= n_dims;
         send_displs[i] *= n_dims;
@@ -329,12 +357,20 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
     }
 
     MPI_Alltoallv(p_aux, send_counts, send_displs, MPI_DOUBLE, p_aux_2, recv_counts, recv_displs, MPI_DOUBLE, comm);
+
     for (long i = 0; i < sum1; i++)
         pt_arr[i] = &p_aux_2[i * n_dims];
 
     int size = (id < p/2 + (p%2)) ? sum1 : 0;
     int total_size = 0;
+
+    printf("id: %d, size: %d, total_size: %d\n", id, size, total_size);
+    fflush(stdout);
+
     MPI_Allreduce(&size, &total_size, 1, MPI_INT, MPI_SUM, comm);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    exit(0);
 
     int m1 = -1, m2 = -1;
     int min_proj;
@@ -352,7 +388,6 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
                 }
             swap(m2, m1+1);
             u = (proj[m1] + proj[m1+1])/2;
-            // Enviar de m1+1 a r para a direita
             MPI_Send(proj+m1+1, sum1-(m1+1), MPI_DOUBLE, id+1, 0, comm);
             MPI_Send(p_aux_2+(m1+1)*n_dims, (sum1-(m1+1))*n_dims, MPI_DOUBLE, id+1, 1, comm);
             sum1 = m1+1;
@@ -360,8 +395,7 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         else {
             u = proj[m1];
             // printf("id: %d, u: %f\n", id, u);
-            // fflush(stdout);
-            // Enviar de m1 a r para a direita
+            // fflush(stoutd);
             MPI_Send(proj+m1, sum1-m1, MPI_DOUBLE, id+1, 0, comm);
             MPI_Send(p_aux_2+m1*n_dims, (sum1-m1)*n_dims, MPI_DOUBLE, id+1, 1, comm);
             sum1 = m1;
@@ -573,6 +607,8 @@ int main(int argc, char **argv) {
     block_size = (int *) malloc (p * sizeof(int));
     for (int i = 0; i < p; i++) {
         block_size[i] = BLOCK_SIZE(i,p,np);
+        // printf("id: %d, i: %d, block_size[i]: %d\n", id, i, block_size[i]);
+        // fflush(stdout);
     }
 
     idx_global = (long *) malloc (aux * sizeof(long));
@@ -591,6 +627,8 @@ int main(int argc, char **argv) {
     // Se desse para englobar este no ciclo de cima era fixe
     for (int i = 0; i < block_size[id]; i++) {
         idx_global[i] = BLOCK_LOW(id,p,np) + i;
+        // printf("id: %d, i: %d, idx_global[i]: %ld\n", id, i, idx_global[i]);
+        // fflush(stdout);
     }
 
     pt_arr_idx0 = (double *) malloc (n_dims*sizeof(double));
@@ -599,8 +637,6 @@ int main(int argc, char **argv) {
     proj = (double *) malloc (aux * sizeof(double));
     pivots = (double *) malloc (p * sizeof(double));
     glob_pivots = (double *) malloc (p * p * sizeof(double));
-    
-
     send_displs = (int *) malloc (p * sizeof(int));
     recv_displs = (int *) malloc (p * sizeof(int));
     send_counts = (int *) malloc (p * sizeof(int));
