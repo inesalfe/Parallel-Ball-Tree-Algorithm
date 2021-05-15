@@ -6,7 +6,7 @@
 
 struct reduce_d_i { 
     double max_d; 
-    int idx; 
+    int p_id; 
 } in_max, out_max;
 
 struct reduce_i_i { 
@@ -214,9 +214,7 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
 
     MPI_Allreduce(&in_min, &out_min, 1, MPI_2INT, MPI_MINLOC, comm);
 
-    int root_id;
     if (id == out_min.p_id) {
-        root_id = id;
         // printf("idx0: %d ", out_min.p_id);
         // fflush(stdout);
         // print_point(pt_arr[out_min.idx0], n_dims);
@@ -225,61 +223,70 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         }
     }
 
-    MPI_Bcast(pt_arr_idx0, n_dims, MPI_DOUBLE, root_id, comm);
+    MPI_Bcast(pt_arr_idx0, n_dims, MPI_DOUBLE, out_min.p_id, comm);
 
     // printf("id: %d ", id);
     // fflush(stdout);
     // print_point(pt_arr_idx0, n_dims);
 
     double d;
+    int a;
     in_max.max_d = 0;
-    in_max.idx = -1;
+    in_max.p_id = -1;
     for (int i = 0; i < block_size[id_initial]; ++i) {
         d = dist(pt_arr_idx0, pt_arr[i]);
         if (d > in_max.max_d) {
             in_max.max_d = d;
-            in_max.idx = i;
+            in_max.p_id = id;
+            a = i;
         }
     }
-
-    // Rever a partir daqui - é precio os outros processadores saberem qual é o root
 
     MPI_Allreduce(&in_max, &out_max, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
     
-    if (in_max.max_d == out_max.max_d) {
-        root_id = id;
+    if (id == out_max.p_id) {
         for (int i = 0; i < n_dims; i++) {
-            pt_arr_a[i] = pt_arr[out_max.idx][i];
+            pt_arr_a[i] = pt_arr[a][i];
         }
-        printf("id: %d ", id);
-        fflush(stdout);
-        print_point(pt_arr_a, n_dims);
+        // printf("a - id: %d ", id);
+        // fflush(stdout);
+        // print_point(pt_arr_a, n_dims);
     }
 
-    MPI_Bcast(pt_arr_a, n_dims, MPI_DOUBLE, root_id, comm);
+    MPI_Bcast(pt_arr_a, n_dims, MPI_DOUBLE, out_max.p_id, comm);
 
-    printf("id: %d ", id);
-    fflush(stdout);
-    print_point(pt_arr_a, n_dims);
+    // printf("id: %d ", id);
+    // fflush(stdout);
+    // print_point(pt_arr_a, n_dims);
 
+    int b;
     in_max.max_d = 0;
-    in_max.idx = -1;
+    in_max.p_id = -1;
     for (int i = 0; i < block_size[id_initial]; ++i) {
         d = dist(pt_arr_a, pt_arr[i]);
         if (d > in_max.max_d) {
             in_max.max_d = d;
-            in_max.idx = i;
+            in_max.p_id = id;
+            b = i;
         }
     }
 
     MPI_Allreduce(&in_max, &out_max, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
-    
-    if (in_max.max_d == out_max.max_d)    
-        for (int i = 0; i < n_dims; i++) {
-            pt_arr_b[i] = pt_arr[out_max.idx][i];
-        }
 
-    MPI_Bcast(pt_arr_b, n_dims, MPI_DOUBLE, 0, comm);
+    if (id == out_max.p_id) {
+        for (int i = 0; i < n_dims; i++) {
+            pt_arr_b[i] = pt_arr[b][i];
+        }
+        // printf("b - id: %d ", id);
+        // fflush(stdout);
+        // print_point(pt_arr_b, n_dims);
+    }
+
+    MPI_Bcast(pt_arr_b, n_dims, MPI_DOUBLE, out_max.p_id, comm);
+
+    // printf("id: %d ", id);
+    // fflush(stdout);
+    // print_point(pt_arr_b, n_dims);
 
     if (pt_arr_a[0] > pt_arr_b[0]) {
         double temp;
@@ -312,7 +319,13 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         pivots[i] = proj[temp_idx];
     }
 
+    // printf("id: %d ", id);
+    // print_point(pivots, p);
+
     MPI_Gather(pivots, p, MPI_DOUBLE, glob_pivots, p, MPI_DOUBLE, 0, comm);
+
+    // printf("id: %d ", id);
+    // print_point(glob_pivots, p*p);
 
     if(!id){
         prev_piv_idx = -1;
@@ -343,6 +356,14 @@ void ballAlg(long tree_id, int lvl, MPI_Comm comm) {
         sum1 += recv_counts[i];
         sum2 += send_counts[i];
     }
+
+    // Rever a partir daqui - soma a 0
+
+    printf("id: %d, sum1: %d\n", id, sum1);
+    fflush(stdout);
+
+    MPI_Barrier(comm);
+    exit(0);
 
     MPI_Alltoallv(proj, send_counts, send_displs, MPI_DOUBLE, recv_buffer, recv_counts, recv_displs, MPI_DOUBLE, comm);
 
