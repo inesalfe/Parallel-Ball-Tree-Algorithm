@@ -30,7 +30,7 @@ typedef struct pt_struct {
     double *pt;
 } pt;
 
-long n_dims;
+int n_dims;
 long np;
 int p;
 int p_initial;
@@ -324,9 +324,8 @@ long ballAlg_seq(long l, long r) {
         // printf("%ld %ld %ld %f ", tree[tree_counter].node_id, tree[tree_counter].left, tree[tree_counter].right, tree[tree_counter].radius);
         // print_point(pts[l].pt, n_dims);
         // fflush(stdout);
-        printf("%f ", tree[tree_counter].radius);
-        print_point(pts[l].pt, n_dims);
-        fflush(stdout);
+        // printf("%f ", tree[tree_counter].radius);
+        // print_point(pts[l].pt, n_dims);
         tree_idx++;
         tree_counter++;
         return tree_idx-1;
@@ -378,9 +377,8 @@ long ballAlg_seq(long l, long r) {
     // fflush(stdout);
     // print_point(centers[tree[temp_counter].center_idx], n_dims);
 
-    printf("%f ", tree[temp_counter].radius);
-    fflush(stdout);
-    print_point(centers[tree[temp_counter].center_idx], n_dims);
+    // printf("%f ", tree[temp_counter].radius);
+    // print_point(centers[tree[temp_counter].center_idx], n_dims);
 
     tree_idx++;
     n_center++;
@@ -998,9 +996,9 @@ void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
         // print_point(centers[tree[tree_counter].center_idx], n_dims);
         // fflush(stdout);
 
-        printf("%f ", tree[tree_counter].radius);
-        print_point(centers[tree[tree_counter].center_idx], n_dims);
-        fflush(stdout);
+        // printf("%f ", tree[tree_counter].radius);
+        // print_point(centers[tree[tree_counter].center_idx], n_dims);
+        // fflush(stdout);
                 
         tree_counter++;
     }
@@ -1012,6 +1010,8 @@ void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
 
     if (lvl == log(p_initial)/log(2)-1) {
 
+        free(pt_arr_a);
+        free(pt_arr_b);
         pts = (pt *)malloc(sizeof(pt) * block_size[id_initial]);
         for (int i = 0; i < block_size[id_initial]; ++i) {
             // pts[i].pt = (double *) malloc(n_dims * sizeof(double));
@@ -1068,6 +1068,22 @@ void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
     }
 }
 
+void print_tree(node *tree) {
+    if (!id_initial) {
+        fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
+        fflush(stdout);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    for (long i = 0; i < tree_counter; ++i) {
+        // fprintf(stdout, "%ld %ld %ld %f ", tree[i].node_id, tree[i].left, tree[i].right, tree[i].radius);
+        fprintf(stdout, "%f ", tree[i].radius);
+        if (tree[i].left == -1)
+            print_point(pts[tree[i].center_idx].pt, n_dims);
+        else
+            print_point(centers[tree[i].center_idx], n_dims);
+    }
+}
+
 int main(int argc, char **argv) {
 
     double elapsed_time;
@@ -1081,8 +1097,10 @@ int main(int argc, char **argv) {
     MPI_Comm_size (MPI_COMM_WORLD, &p);
 
     if (argc != 4) {
-        if (!id)
+        if (!id) {
             printf ("Command line: %s <m>\n", argv[0]);
+            fflush(stdout);
+        }
         MPI_Finalize();
         exit (1);
     }
@@ -1157,15 +1175,19 @@ int main(int argc, char **argv) {
     elapsed_time += MPI_Wtime();
 
     MPI_Barrier(MPI_COMM_WORLD);
-    exit(0);
+
+    if (!id_initial) {
+        fprintf(stderr, "%.1lf\n", elapsed_time);
+        //print_tree(tree);
+    }
+
+    // print_tree(tree);
 
     free(p_aux);
     free(block_size);
     free(branch_size);
     free(idx_global);
     free(pt_arr_idx0);
-    free(pt_arr_a);
-    free(pt_arr_b);
     free(proj);
     free(pivots);
     free(glob_pivots);
@@ -1181,11 +1203,6 @@ int main(int argc, char **argv) {
     free(centers);
     free(center);
     free(pts);
-
-    if (!id_initial) {
-        fprintf(stderr, "%.1lf\n", elapsed_time);
-        //print_tree(tree);
-    }
 
     MPI_Finalize();
 
