@@ -281,10 +281,6 @@ void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
 
     MPI_Bcast(pt_arr_a, n_dims, MPI_DOUBLE, out_max.p_id, comm);
 
-    printf("id: %d ", id);
-    fflush(stdout);
-    print_point(pt_arr_a, n_dims);
-
     int b = 0;
     in_max.max_d = 0;
     in_max.p_id = id;
@@ -311,10 +307,6 @@ void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
 
     MPI_Bcast(pt_arr_b, n_dims, MPI_DOUBLE, out_max.p_id, comm);
 
-    printf("id: %d ", id);
-    fflush(stdout);
-    print_point(pt_arr_b, n_dims);
-
     if (pt_arr_a[0] > pt_arr_b[0]) {
         double temp;
         for (int i = 0; i < n_dims; i++) {
@@ -323,6 +315,14 @@ void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
             pt_arr_b[i] = temp;
         }
     }
+
+    printf("id: %d a: ", id);
+    fflush(stdout);
+    print_point(pt_arr_a, n_dims);
+
+    printf("id: %d b: ", id);
+    fflush(stdout);
+    print_point(pt_arr_b, n_dims);
 
     for (int i = 0; i < block_size[id_initial]; ++i) {
         proj[i] = 0;
@@ -498,7 +498,7 @@ void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
     // MPI_Barrier(comm);
 
     int m1 = -1, m2 = -1;
-    int min_proj;
+    double min_proj;
     double u;
     if ((id == p/2) && (p%2 == 1)) {
         m1 = quickselect_seq(n_points/2-!(n_points%2)-(total_size-sum1), 0, sum1);
@@ -614,13 +614,22 @@ void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
                 m1 = quickselect_seq(n_points/2-1-total_size, 0, sum1);
                 min_proj = proj[m1+1];
                 m2 = m1+1;
-                for (int i = m1+1; i < sum1; i++)
+                // printf("HERE0 - m1: %d, m2: %d, proj[m1]: %f, proj[m2]: %f, min_proj: %f\n", m1, m2, proj[m1], proj[m2], min_proj);
+                // fflush(stdout);
+                for (int i = m1+2; i < sum1; i++){
+                    // printf("HERE0.1 - i: %d proj[i]: %f, min_proj: %f pt ", i, proj[i], min_proj);
+                    // print_point(&p_aux[i*n_dims], n_dims);
+                    // fflush(stdout);
                     if (proj[i] < min_proj) {
+                        // printf("HERE1 - i: %d proj[i]: %f, pt ", i, proj[i]);
+                        // print_point(&p_aux[i*n_dims], n_dims);
+                        // fflush(stdout);
                         min_proj = proj[i];
                         m2 = i;
                     }
+                }
                 swap(m2, m1+1);
-                printf("HERE - proj[m1]: %f, proj[m2]: %f", proj[m1], proj[m1+1]);
+                printf("HERE - m1: %d proj[m1]: %f, m1+1: %d, m2: %d proj[m2]: %f", m1, proj[m1], m1+1,m2,proj[m1+1]);
                 for (int j = 0; j < n_dims; j++) {
                     printf(" %f ", p_aux[m1*n_dims+j]);
                     fflush(stdout);
@@ -788,7 +797,7 @@ void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
         tree_counter++;
     }
 
-    if (lvl == 1) {
+    if (lvl == 2) {
         MPI_Barrier(comm);
         exit(0);
     }
@@ -803,9 +812,9 @@ void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
     MPI_Comm_rank(new_comm, &new_id);
     MPI_Comm_size(new_comm, &p);
 
-    MPI_Barrier(comm);
+    MPI_Barrier(MPI_COMM_WORLD);
     printf("id: %d, new_id: %d, tree_id: %ld, proc: %d\n", id, new_id, tree_id, p);
-    MPI_Barrier(comm);
+    MPI_Barrier(MPI_COMM_WORLD);
 
     if (id < p) {
         id = new_id;
