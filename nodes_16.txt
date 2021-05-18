@@ -1,0 +1,4 @@
+lab13p3 slots=4
+lab13p8 slots=4
+lab13p9 slots=4
+lab13p4 slots=4

@@ -1,5 +1,5 @@
 CC=mpicc
-CFLAGS=-g 
+CFLAGS=-O3 
 
 ballAlg:  ballAlg.c
 	$(CC) $(CFLAGS) ballAlg.c -o ballAlg -lm
