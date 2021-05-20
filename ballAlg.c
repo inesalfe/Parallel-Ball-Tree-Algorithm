@@ -1606,7 +1606,7 @@ int main(int argc, char **argv) {
         fflush(stdout);
     }
 
-    // print_tree(tree);
+    print_tree(tree);
 
     free(p_aux);
     free(block_size);
