@@ -411,10 +411,12 @@ void ballAlg(long l, long r, long n_id, int lvl) {
     long c_id = -1;
     // 2. Compute points a and b, furthest apart in the current set (approx)
     furthest_apart(l, r, &a, &b);
+    double * pt_a = pts[a].pt;
+    double * pt_b = pts[b].pt;
 
     // 3. Perform the orthogonal projection of all points onto line ab
     for (int i = l; i < r; ++i)
-        pts[i].proj = orth_projv1(pts[a].pt, pts[b].pt, pts[i].pt);
+        pts[i].proj = orth_projv1(pt_a, pt_b, pts[i].pt);
 
     // 4. Compute the center, defined as the median point over all projections
     int m1, m2 = -1;
@@ -433,12 +435,12 @@ void ballAlg(long l, long r, long n_id, int lvl) {
         u = (pts[m1].proj + pts[m2].proj) / 2;
 
     for (int i = 0; i < n_dims; ++i) {
-        aux = (pts[b].pt[i] - pts[a].pt[i]);
+        aux = (pt_b[i] - pt_a[i]);
         centers[c_id][i] = u * aux;
         abnorm += aux * aux;
     }
     for (int i = 0; i < n_dims; ++i)
-        centers[c_id][i] = centers[c_id][i] / abnorm + pts[a].pt[i];
+        centers[c_id][i] = centers[c_id][i] / abnorm + pt_a[i];
 
     double max_r = 0, rad;
     for (int i = l; i < r; ++i) {
