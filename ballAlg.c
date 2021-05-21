@@ -1146,84 +1146,18 @@ void ballAlg(long n_points, long tree_id, int lvl, MPI_Comm comm) {
 }
 
 void print_tree(node *tree) {
-    if (!id_initial) {
-        fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
+    for (long i = 0; i < tree_counter; ++i) {
+        fprintf(stdout, "%ld %ld %ld %f ", tree[i].node_id, tree[i].left, tree[i].right, tree[i].radius);
+        // fprintf(stdout, "%f ", tree[i].radius);
         fflush(stdout);
+        if (tree[i].left == -1) {
+            print_point(pts[tree[i].center_idx].pt, n_dims);
+            fflush(stdout);
+        } else {
+            print_point(centers[tree[i].center_idx], n_dims);
+            fflush(stdout);
+        }
     }
-    // MPI_Barrier(MPI_COMM_WORLD);
-    // for (int k = 0; k < p_initial; ++k) {
-    //     if (id_initial == k) {
-            for (long i = 0; i < tree_counter; ++i) {
-                fprintf(stdout, "%ld %ld %ld %f ", tree[i].node_id, tree[i].left, tree[i].right, tree[i].radius);
-                // fprintf(stdout, "%f ", tree[i].radius);
-                fflush(stdout);
-                if (tree[i].left == -1) {
-                    print_point(pts[tree[i].center_idx].pt, n_dims);
-                    fflush(stdout);
-                } else {
-                    print_point(centers[tree[i].center_idx], n_dims);
-                    fflush(stdout);
-                }
-            }
-        // }
-    //     MPI_Barrier(MPI_COMM_WORLD);
-    // }
-
-    // if (!id_initial) {
-
-    //     char buff[256];
-
-    //     fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
-    //     fflush(stdout);
-
-    //     for (long i = 0; i < tree_counter; ++i) {
-    //         // fprintf(stdout, "%ld %ld %ld %f ", tree[i].node_id, tree[i].left, tree[i].right, tree[i].radius);
-    //         fprintf(stdout, "%f ", tree[i].radius);
-    //         fflush(stdout);
-    //         if (tree[i].left == -1)
-    //             print_point(pts[tree[i].center_idx].pt, n_dims);
-    //         else
-    //             print_point(centers[tree[i].center_idx], n_dims);
-    //     }
-    //     fflush(stdout);
-
-    //     for (int i = 1; i < p_initial; i++) {
-
-    //         int counter = 0;
-    //         MPI_Recv(&counter, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-    //         for (int j = 0; j < counter; j++) {
-    //             memset(buff, 0, sizeof buff);
-    //             MPI_Recv(buff, 256, MPI_CHAR, i, j + 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    //             fprintf(stdout, "%s", buff);
-    //             fflush(stdout);
-    //         }
-    //     }
-
-    // } else {
-
-    //     char buff[256];
-
-    //     MPI_Send(&tree_counter, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
-
-    //     for (int j = 0; j < tree_counter; j++) {
-
-    //         memset(buff, 0, sizeof buff);
-    //         sprintf(buff, "%f ", tree[j].radius);
-    //         // sprintf(buff, "%ld %ld %ld %f ", tree[j].node_id, tree[j].left, tree[j].right, tree[j].radius);
-    //         if (tree[j].left == -1) {
-    //             for (int d = 0; d < n_dims; ++d)
-    //                 sprintf(buff, "%s%f ", buff, pts[tree[j].center_idx].pt[d]);
-    //             sprintf(buff, "%s\n", buff);
-    //         } else {
-    //             for (int d = 0; d < n_dims; ++d)
-    //                 sprintf(buff, "%s%f ", buff, centers[tree[j].center_idx][d]);
-    //             sprintf(buff, "%s\n", buff);
-    //         }
-
-    //         MPI_Send(buff, strlen(buff), MPI_CHAR, 0, j + 1, MPI_COMM_WORLD);
-    //     }
-    // }
 }
 
 int main(int argc, char **argv) {
@@ -1254,6 +1188,11 @@ int main(int argc, char **argv) {
 
     p_initial = p;
     id_initial = id;
+
+    // if (!id_initial) {
+    //     fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
+    //     fflush(stdout);
+    // }
 
     aux = ceil(np / p) * 5 / 2;
     p_aux = (double *)malloc(n_dims * aux * sizeof(double));
@@ -1323,7 +1262,7 @@ int main(int argc, char **argv) {
         fflush(stdout);
     }
 
-    print_tree(tree);
+    // print_tree(tree);
 
     free(p_aux);
     free(block_size);

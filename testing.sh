@@ -3,9 +3,8 @@
 os="0"
 proc="8"
 
-# 20 1000000 0
-
-./ballQuery pts1.txt 1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7 8 9 1 2
+# srun --ntasks-per-node=1 -n 8 ballAlg 20 1000000 0 > pts1.txt
+# ./ballQuery pts1.txt 1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7 8 9 1 2
 
 echo "--- 20 1000000 0 ---"
 
@@ -17,9 +16,8 @@ else
   echo "Incorrect output"
 fi
 
-# 3 5000000 0
-
-./ballQuery pts2.txt 4 5 6
+# srun --ntasks-per-node=1 -n 8 ballAlg 3 5000000 0 > pts2.txt
+# ./ballQuery pts2.txt 4 5 6
 
 echo "--- 3 5000000 0 ---"
 
@@ -31,9 +29,8 @@ else
   echo "Incorrect output"
 fi
 
-# 4 10000000 0
-
-./ballQuery pts3.txt 2 4 6 8
+# srun --ntasks-per-node=1 -n 8 ballAlg 4 10000000 0 > pts3.txt
+# ./ballQuery pts3.txt 2 4 6 8
 
 echo "--- 4 10000000 0 ---"
 
@@ -45,9 +42,7 @@ else
   echo "Incorrect output"
 fi
 
-# 3 20000000 0
-
-./ballQuery pts4.txt 1 5 9
+# ./ballQuery pts4.txt 1 5 9
 
 echo "--- 3 20000000 0 ---"
 
@@ -59,9 +54,7 @@ else
   echo "Incorrect output"
 fi
 
-# 4 20000000 0
-
-./ballQuery pts5.txt 8 6 4 2
+# ./ballQuery pts5.txt 8 6 4 2
 
 echo "--- 4 20000000 0 ---"
 
