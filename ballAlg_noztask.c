@@ -68,7 +68,6 @@ pt *pts;
 #define BLOCK_LOW(id, p, np) ((id) * (np) / (p))
 #define BLOCK_HIGH(id, p, np) (BLOCK_LOW((id) + 1, p, np) - 1)
 #define BLOCK_SIZE(id, p, np) (BLOCK_HIGH(id, p, np) - BLOCK_LOW(id, p, np) + 1)
-#define min(A, B) (A) < (B) ? (A) : (B)
 
 void print_point(double *pt, int dim) {
     for (int i = 0; i < dim; ++i) {
@@ -1190,28 +1189,31 @@ int main(int argc, char **argv) {
     p_initial = p;
     id_initial = id;
 
-    if (!id_initial) {
-        fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
-        fflush(stdout);
-    }
+    // if (!id_initial) {
+    //     fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
+    //     fflush(stdout);
+    // }
 
-    if (np < p*p) {
-        p_initial = 1;
-    }
-
-    aux = min(ceil(np / p_initial) * 5 / 2, np);
+    aux = ceil(np / p) * 5 / 2;
     p_aux = (double *)malloc(n_dims * aux * sizeof(double));
+    // pt_arr = (double **)malloc(aux * sizeof(double *));
+    // for (long i = 0; i < aux; i++)
+    //     pt_arr[i] = &p_aux[i * n_dims];
 
-    pt_arr_a = (double *)malloc(n_dims * sizeof(double));
-    pt_arr_b = (double *)malloc(n_dims * sizeof(double));
-    tree = (node *)malloc((ceil(log(p_initial) / log(2)) + (2 * aux - 1)) * sizeof(node));
-    double *center_aux = (double *)malloc((ceil(log(p_initial) / log(2)) + aux - 1) * n_dims * sizeof(double));
-    centers = (double **)malloc((ceil(log(p_initial) / log(2)) + aux - 1) * sizeof(double *));
-    for (int i = 0; i < (ceil(log(p_initial) / log(2)) + aux - 1); ++i)
-        centers[i] = &center_aux[i * n_dims];
+    block_size = (int *)malloc(p * sizeof(int));
+    branch_size = (int *)malloc(p * sizeof(int));
+    for (int i = 0; i < p; i++) {
+        block_size[i] = BLOCK_SIZE(i, p, np);
+        // printf("id: %d, i: %d, block_size[i]: %d\n", id, i, block_size[i]);
+        // fflush(stdout);
+    }
 
-    int BL = (np < p*p) ? 0 : BLOCK_LOW(id, p_initial, np);
-    int BH = (np < p*p) ? np-1 : BLOCK_HIGH(id, p_initial, np);
+    idx_global = (long *)malloc(aux * sizeof(long));
+
+    int BL = BLOCK_LOW(id, p, np);
+    int BH = BLOCK_HIGH(id, p, np);
+    // printf("id: %d, BL: %d, BH: %d, BS: %d\n", id, BL, BH, block_size[id_initial]);
+    // fflush(stdout);
     for (int i = 0; i < np; i++)
         for (int j = 0; j < n_dims; j++) {
             if ((i >= BL) && (i <= BH)) {
@@ -1220,46 +1222,36 @@ int main(int argc, char **argv) {
                 random();
         }
 
-    if (p_initial == 1) {
-
-        pts = (pt *)malloc(sizeof(pt) * np);
-        for (int i = 0; i < np; ++i) {
-            pts[i].pt = &p_aux[i * n_dims];
-            pts[i].i = i;
-        }
-
-        ballAlg_seq(0, np);
+    // Se desse para englobar este no ciclo de cima era fixe
+    for (int i = 0; i < block_size[id]; i++) {
+        idx_global[i] = BLOCK_LOW(id, p, np) + i;
+        // printf("id: %d, i: %d, idx_global[i]: %ld\n", id, i, idx_global[i]);
+        // fflush(stdout);
     }
-    else {
 
-        block_size = (int *)malloc(p * sizeof(int));
-        branch_size = (int *)malloc(p * sizeof(int));
-        for (int i = 0; i < p; i++) {
-            block_size[i] = BLOCK_SIZE(i, p, np);
-        }
+    pt_arr_idx0 = (double *)malloc(n_dims * sizeof(double));
+    pt_arr_a = (double *)malloc(n_dims * sizeof(double));
+    pt_arr_b = (double *)malloc(n_dims * sizeof(double));
+    proj = (double *)malloc(aux * sizeof(double));
+    pivots = (double *)malloc(p * sizeof(double));
+    glob_pivots = (double *)malloc(p * p * sizeof(double));
+    send_displs = (int *)malloc(p * sizeof(int));
+    recv_displs = (int *)malloc(p * sizeof(int));
+    send_counts = (int *)malloc(p * sizeof(int));
+    recv_counts = (int *)malloc(p * sizeof(int));
+    recv_buffer = (double *)malloc(aux * sizeof(double));
+    recv_buffer_long = (long *)malloc(aux * sizeof(long));
+    p_aux_2 = (double *)malloc(n_dims * aux * sizeof(double));
+    sizes = (int *)malloc(p * sizeof(int));
 
-        idx_global = (long *)malloc(aux * sizeof(long));
+    tree = (node *)malloc((ceil(log(p_initial) / log(2)) + (2 * aux - 1)) * sizeof(node));
+    double *center_aux = (double *)malloc((ceil(log(p_initial) / log(2)) + aux - 1) * n_dims * sizeof(double));
+    centers = (double **)malloc((ceil(log(p_initial) / log(2)) + aux - 1) * sizeof(double *));
+    for (int i = 0; i < (ceil(log(p_initial) / log(2)) + aux - 1); ++i)
+        centers[i] = &center_aux[i * n_dims];
+    center = (double *)malloc(n_dims * sizeof(double));
 
-        for (int i = 0; i < block_size[id]; i++) {
-            idx_global[i] = BLOCK_LOW(id, p, np) + i;
-        }
-
-        pt_arr_idx0 = (double *)malloc(n_dims * sizeof(double));
-        proj = (double *)malloc(aux * sizeof(double));
-        pivots = (double *)malloc(p * sizeof(double));
-        glob_pivots = (double *)malloc(p * p * sizeof(double));
-        send_displs = (int *)malloc(p * sizeof(int));
-        recv_displs = (int *)malloc(p * sizeof(int));
-        send_counts = (int *)malloc(p * sizeof(int));
-        recv_counts = (int *)malloc(p * sizeof(int));
-        recv_buffer = (double *)malloc(aux * sizeof(double));
-        recv_buffer_long = (long *)malloc(aux * sizeof(long));
-        p_aux_2 = (double *)malloc(n_dims * aux * sizeof(double));
-        sizes = (int *)malloc(p * sizeof(int));
-        center = (double *)malloc(n_dims * sizeof(double));
-
-        ballAlg(np, 0, 0, MPI_COMM_WORLD);
-    }
+    ballAlg(np, 0, 0, MPI_COMM_WORLD);
 
     elapsed_time += MPI_Wtime();
 
@@ -1270,36 +1262,29 @@ int main(int argc, char **argv) {
         fflush(stdout);
     }
 
-    print_tree(tree);
+    // print_tree(tree);
 
-    if (p_initial == 1) {
-
-        free(p_aux);
-        free(tree);
-        free(center_aux);
-        free(centers);
-        free(pts);
-    }
-    else {
-
-        free(block_size);
-        free(branch_size);
-        free(idx_global);
-        free(pt_arr_idx0);
-        free(proj);
-        free(pivots);
-        free(glob_pivots);
-        free(send_displs);
-        free(recv_displs);
-        free(send_counts);
-        free(recv_counts);
-        free(recv_buffer);
-        free(recv_buffer_long);
-        free(p_aux_2);
-        free(center);
-        free(sizes);
-
-    }
+    free(p_aux);
+    free(block_size);
+    free(branch_size);
+    free(idx_global);
+    free(pt_arr_idx0);
+    free(proj);
+    free(pivots);
+    free(glob_pivots);
+    free(send_displs);
+    free(recv_displs);
+    free(send_counts);
+    free(recv_counts);
+    free(recv_buffer);
+    free(recv_buffer_long);
+    free(p_aux_2);
+    free(tree);
+    free(center_aux);
+    free(centers);
+    free(center);
+    free(pts);
+    free(sizes);
 
     MPI_Finalize();
 }
