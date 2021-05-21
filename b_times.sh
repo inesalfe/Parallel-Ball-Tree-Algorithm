@@ -13,6 +13,81 @@ export OMP_NESTED=true
 
 loop_variable=10
 
+# echo "--- 2 5 0 ---"
+
+# sum=0
+# for (( i=0; i<loop_variable; i++ ))
+# do
+# 	time=`srun ballAlg 2 5 0 2>&1`
+# 	wait
+# 	echo "$time"
+# 	sum=`echo "$sum + $time" | bc -l`
+# done
+
+# avg=`echo "$sum / $loop_variable" | bc -l`
+# avg=`printf "%.1f" $avg`
+# echo "Average time: $avg"
+
+# echo "--- 2 8 0 ---"
+
+# sum=0
+# for (( i=0; i<loop_variable; i++ ))
+# do
+# 	time=`srun ballAlg 2 8 0 2>&1`
+# 	wait
+# 	echo "$time"
+# 	sum=`echo "$sum + $time" | bc -l`
+# done
+
+# avg=`echo "$sum / $loop_variable" | bc -l`
+# avg=`printf "%.1f" $avg`
+# echo "Average time: $avg"
+
+# echo "--- 3 3 3 ---"
+
+# sum=0
+# for (( i=0; i<loop_variable; i++ ))
+# do
+# 	time=`srun ballAlg 3 3 3 2>&1`
+# 	wait
+# 	echo "$time"
+# 	sum=`echo "$sum + $time" | bc -l`
+# done
+
+# avg=`echo "$sum / $loop_variable" | bc -l`
+# avg=`printf "%.1f" $avg`
+# echo "Average time: $avg"
+
+# echo "--- 5 4 3 ---"
+
+# sum=0
+# for (( i=0; i<loop_variable; i++ ))
+# do
+# 	time=`srun ballAlg 5 4 3 2>&1`
+# 	wait
+# 	echo "$time"
+# 	sum=`echo "$sum + $time" | bc -l`
+# done
+
+# avg=`echo "$sum / $loop_variable" | bc -l`
+# avg=`printf "%.1f" $avg`
+# echo "Average time: $avg"
+
+# echo "--- 2 6 8 ---"
+
+# sum=0
+# for (( i=0; i<loop_variable; i++ ))
+# do
+# 	time=`srun ballAlg 2 6 8 2>&1`
+# 	wait
+# 	echo "$time"
+# 	sum=`echo "$sum + $time" | bc -l`
+# done
+
+# avg=`echo "$sum / $loop_variable" | bc -l`
+# avg=`printf "%.1f" $avg`
+# echo "Average time: $avg"
+
 echo "--- 20 1000000 0 ---"
 
 sum=0
