@@ -308,6 +308,8 @@ void get_median(int l, int h, int *median_1, int *median_2) {
     }
 }
 
+// long tree_idx;
+
 // This is the algorithm sequential version but with tasks in the recursive calls
 void ballAlg_tasks(long l, long r, long n_id, int lvl) {
 
@@ -451,7 +453,8 @@ void ballAlg(long l, long r, long n_id, int lvl) {
     tree[temp_counter].node_id = n_id;
 
     if (((block_size[id_initial] & (block_size[id_initial] - 1)) != 0) && lvl == n_levels - 1) {
-
+// printf("id: %d, node_id: %ld, id_last: %ld\n", id_initial, n_id, id_last);
+// fflush(stdout);
 #pragma omp critical
         {
             tree[temp_counter].left = id_last;
@@ -471,6 +474,9 @@ int max_parallel_level; // Max level until which paralelization inside the algor
 
 /* Parallel algoritm to be used in the first levels */
 void ballAlg_omp(long l, long r, long n_id, long lvl, int threads) {
+
+    // printf("id: %d, id_last: %ld\n", id_initial, id_last);
+    // fflush(stdout);
 
     long a = -1;         // Global a
     long b = -1;         // Global b
@@ -569,6 +575,8 @@ void ballAlg_omp(long l, long r, long n_id, long lvl, int threads) {
             {
                 if (pts[a].pt[0] > pts[b].pt[0])
                     swap_seq(&a, &b);
+                // printf("id: %ld, pts[a].pt: %f %f %f, pts[b].pt: %f %f %f\n", n_id, pts[a].pt[0], pts[a].pt[1], pts[a].pt[2], pts[b].pt[0], pts[b].pt[1], pts[b].pt[2]);
+                // fflush(stdout);
             }
 
             pt_arr_a = pts[a].pt;
@@ -584,7 +592,10 @@ void ballAlg_omp(long l, long r, long n_id, long lvl, int threads) {
             #pragma omp single
             {
                 get_median(l, r, &m1, &m2);
-
+// if ((r - l) % 2)
+//     printf("id: %ld, pt[m1]: %f %f %f\n", n_id, pts[m1].pt[0], pts[m1].pt[1], pts[m1].pt[2]);
+// else
+//     printf("id: %ld, pt[m1]: %f %f %f, pt[m2]: %f %f %f\n", n_id, pts[m1].pt[0], pts[m1].pt[1], pts[m1].pt[2], pts[m2].pt[0], pts[m2].pt[1], pts[m2].pt[2]);
                 #pragma omp critical // Increment the counter of centers
                 {
                     c_id = n_center++;
@@ -599,8 +610,12 @@ void ballAlg_omp(long l, long r, long n_id, long lvl, int threads) {
                 else {
                     u = (pts[m1].proj + pts[m2].proj) / 2;
                 }
+                // printf("id: %ld, u: %f\n", n_id, u);
+                // fflush(stdout);
             }
 
+            // printf("id: %ld, pt_arr_a: %f %f %f, pt_arr_b: %f %f %f\n", n_id, pt_arr_a[0], pt_arr_a[1], pt_arr_a[2], pt_arr_b[0], pt_arr_b[1], pt_arr_b[2]);
+            // fflush(stdout);
             double aux;
             #pragma omp for reduction(+ \
                           : abnorm) // Using reduction since abnorm is a global variable
@@ -613,6 +628,12 @@ void ballAlg_omp(long l, long r, long n_id, long lvl, int threads) {
             #pragma omp for
             for (int i = 0; i < n_dims; ++i)
                 centers[c_id][i] = centers[c_id][i] / abnorm + pt_arr_a[i];
+
+            // #pragma omp single
+            // {
+            //     printf("id: %ld, abnorm: %f, centers[c_id]: %f %f %f\n", n_id, abnorm, centers[c_id][0], centers[c_id][1], centers[c_id][2]);
+            //     fflush(stdout);
+            // }
 
             double rad;
             double max_r_t = 0; // Maximum radius inside each thread
@@ -678,10 +699,80 @@ void ballAlg_omp(long l, long r, long n_id, long lvl, int threads) {
     }
 }
 
+/*
+long ballAlg_seq(long l, long r) {
+
+    long id_temp = tree_idx++;
+
+    if (r - l == 1) {
+        tree[tree_counter].center_idx = l;
+        tree[tree_counter].radius = 0;
+        tree[tree_counter].left = -1;
+        tree[tree_counter].right = -1;
+        tree[tree_counter].node_id = id_temp;
+        tree_counter++;
+        return id_temp;
+    }
+
+    long temp_counter = tree_counter++;
+
+    long a, b;
+    furthest_apart(l, r, &a, &b);
+
+    pt_arr_a = pts[a].pt;
+    pt_arr_b = pts[b].pt;
+
+    for (int i = l; i < r; ++i)
+        pts[i].proj = orth_projv1(pt_arr_a, pt_arr_b, pts[i].pt);
+
+    int m1, m2 = -1;
+    get_median(l, r, &m1, &m2);
+
+    double abnorm = 0.0, aux, u;
+    if ((r - l) % 2)
+        u = pts[m1].proj;
+    else
+        u = (pts[m1].proj + pts[m2].proj) / 2;
+
+    for (int i = 0; i < n_dims; ++i) {
+        aux = (pt_arr_b[i] - pt_arr_a[i]);
+        centers[n_center][i] = u * aux;
+        abnorm += aux * aux;
+    }
+    for (int i = 0; i < n_dims; ++i)
+        centers[n_center][i] = centers[n_center][i] / abnorm + pt_arr_a[i];
+
+    double max_r = 0, rad;
+    for (int i = l; i < r; ++i) {
+        rad = dist(centers[n_center], pts[i].pt);
+        if (rad > max_r)
+            max_r = rad;
+    }
+
+    tree[temp_counter].center_idx = n_center++;
+    tree[temp_counter].radius = sqrt(max_r);
+    tree[temp_counter].node_id = id_temp;
+
+    tree[temp_counter].left = ballAlg_seq(l, l + (r - l) / 2);
+    tree[temp_counter].right = ballAlg_seq(l + (r - l) / 2, r);
+
+    return id_temp;
+}
+*/
+
 void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) {
+
+    // Only called if no leaves will be done here
+
+    if (print_info == 1) {
+        printf("block_size[id_initial]: %d, np: %ld, id_inital: %d, id: %d, lvl: %d, n_id: %ld\n", block_size[id_initial], n_points, id_initial, id, lvl, n_id);
+        fflush(stdout);
+    }
 
     /* LOAD BALACING: EVENS OUT THE NUMBER OF POINTS IN THE PROCESSORS WITH THE LARGEST AND SMALLEST NUMBER OF POINTS*/
     if (n_id != 0) {
+        // printf("Before - block_size[id_initial]: %d, np: %ld, id_inital: %d, id: %d, lvl: %d, n_id: %ld\n", block_size[id_initial], n_points, id_initial, id, lvl, n_id);
+        // fflush(stdout);
 
         MPI_Allgather(&block_size[id_initial], 1, MPI_INT, sizes, 1, MPI_INT, comm);
 
@@ -716,6 +807,9 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
             MPI_Recv(idx_global + first_id, recv_quant, MPI_LONG, p_max, 2, comm, MPI_STATUS_IGNORE);
             block_size[id_initial] += recv_quant;
         }
+
+        // printf("After - block_size[id_initial]: %d, np: %ld, id_inital: %d, id: %d, lvl: %d, n_id: %ld\n", block_size[id_initial], n_points, id_initial, id, lvl, n_id);
+        // fflush(stdout);
     }
 
     long max_it = block_size[id_initial];
@@ -729,9 +823,9 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
     in_max_global.p_id = id;
     double max_d = 0, min_proj_g = 0;
     long local_g = 0, a_g, b_g, min_index_g;
-    int sum1 = 0;
+    int sum1 = 0; //
     int sum2 = 0;
-    double min_proj_global = 1000;
+    double min_proj_global = 0;
     int m2_global;
     int m1;
     int total_size = 0;
@@ -759,7 +853,8 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                 local_g = local;
             }
         }
-        #pragma omp barrier
+// printf("id: %d, in_min.idx0: %d, in_min.p_id: %d, local: %d\n", id, in_min.idx0, in_min.p_id, local);
+// fflush(stdout);
         #pragma omp single
         {
             /* REDUCES OVER ALL THE PROCESSORS, GETTING THE GLOBAL MINIMUM */
@@ -796,7 +891,6 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                 a_g = a;
             }
         }
-        #pragma omp barrier
         #pragma omp single
         {
             /* FINDS THE GLOBAL POINT FURTHEST APART FROM THE POINT WITH LOWER INDEX - point a */
@@ -813,9 +907,7 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
         /* SAME AS BEFORE, BUT FOR THE POINT b */
         int b = 0;
         in_max.max_d = 0;
-        in_max.p_id = id;
         in_max_global.max_d = 0;
-        in_max_global.p_id = id;
         #pragma omp for
         for (int i = 0; i < max_it; ++i) {
             d = 0;
@@ -834,12 +926,9 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                 b_g = b;
             }
         }
-        #pragma omp barrier
         #pragma omp single
         {
             MPI_Allreduce(&in_max_global, &out_max, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
-
-            // printf("id: %d, n_id: %ld, out_max.max_d: %f, out_max.id: %d\n", id, n_id, out_max.max_d, out_max.p_id);
 
             if (id == out_max.p_id) {
                 for (int j = 0; j < n_dims; j++) {
@@ -859,7 +948,6 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                     pt_arr_b[i] = temp;
                 }
             }
-            // printf("id: %d, n_id: %ld, pt_arr_a[0]: %f, pt_arr_a[1]: %f, pt_arr_b[0]: %f, pt_arr_b[1]: %f\n", id, n_id, pt_arr_a[0], pt_arr_a[1], pt_arr_b[0], pt_arr_b[1]);
         }
         /* EACH PROCESSOR COMPUTES ITS PROJECTIONS OVER THE ab LINE */
         #pragma omp for
@@ -885,7 +973,6 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                 min_proj_g = proj[min_index];
             }
         }
-        #pragma omp barrier
         #pragma omp single
         {
             swap(0, min_index_g);
@@ -976,6 +1063,11 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
             /* SUMS THE SIZES FROM ALL THE LEFT PROCESSORS, UP TO p/2 (IF EVEN NUMBER OF PROCESSORS) OR p/2 + 1 (IF ODD) */
             int size = (id < p / 2 + (p % 2)) ? sum1 : 0;
             MPI_Allreduce(&size, &total_size, 1, MPI_INT, MPI_SUM, comm);
+
+            if (print_info == 1) {
+                printf("id: %d, size: %d, total_size: %d\n", id, size, total_size);
+                fflush(stdout);
+            }
         }
 
         /* FINDS THE ACTUAL MEDIAN (FINALLY) */
@@ -1007,7 +1099,6 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                         m2_global = m2;
                     }
                 }
-                #pragma omp barrier
                 #pragma omp single
                 {
                     swap(m2_global, m1 + 1);
@@ -1125,12 +1216,10 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                                 m2_global = m2;
                             }
                         }
-                        #pragma omp barrier
                         #pragma omp single
                         {
                             swap(m2_global, m1 + 1);
                             u = (proj[m1] + proj[m1 + 1]) / 2;
-                            fflush(stdout);
                             MPI_Send(proj + m1 + 1, sum1 - (m1 + 1), MPI_DOUBLE, id + 1, 0, comm);
                             MPI_Send(p_aux + (m1 + 1) * n_dims, (sum1 - (m1 + 1)) * n_dims, MPI_DOUBLE, id + 1, 1, comm);
                             MPI_Send(idx_global + m1 + 1, sum1 - (m1 + 1), MPI_LONG, id + 1, 2, comm);
@@ -1178,7 +1267,6 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                             m2_global = m2;
                         }
                     }
-                    #pragma omp barrier
                     #pragma omp single
                     {
                         swap(m2_global, m1 + 1);
@@ -1213,7 +1301,6 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                             m2_global = m2;
                         }
                     }
-                    #pragma omp barrier
                     #pragma omp single
                     {
                         swap(m2_global, 0);
@@ -1253,6 +1340,13 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
             MPI_Allreduce(&u, &u_aux_g, 1, MPI_DOUBLE, MPI_SUM, comm);
             u = u_aux_g;
 
+            if (print_info == 1) {
+                MPI_Barrier(comm);
+                printf("id: %d, sum1: %d, u: %f\n", id, sum1, u);
+                fflush(stdout);
+                MPI_Barrier(comm);
+            }
+
             max_d = 0;
         }
 
@@ -1286,7 +1380,7 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                 max_d = max_d_t;
             }
         }
-        #pragma omp barrier
+
         #pragma omp single
         {
             /* THE GLOBAL RADIUS IS COMPUTED */
@@ -1302,6 +1396,11 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
             }
             left = 2 * n_id + 1;
             right = 2 * n_id + 2;
+
+            if (print_info == 1) {
+                printf("id: %d, id_initial: %d, left: %ld, right: %ld\n", id, id_initial, left, right);
+                fflush(stdout);
+            }
 
             /* ONLY THE PROCESS WITH THE CURRENT RANK 0 SAVES THE TREE NODE CORRESPONDING TO THIS ballAlg CALL */
             if (!id) {
@@ -1330,18 +1429,27 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                     pts[i].i = idx_global[i];
                 }
                 /* ONE PROCESS (LOWER RANK) COMPUTES THE LEFT BRANCH... */
-                id_last = pow(2, ceil(log(np) / log(2))) - 1;      // First index of the last level
-                n_levels = floor(log(block_size[0]) / log(2)) + 1; // Number of levels in the tree minus one
+                id_last = pow(2, ceil(log(np) / log(2))) - 1; // First index of the last level
+                int sum = 0;
+                n_levels = ceil(log(block_size[0]) / log(2)); // Number of levels in the tree minus one
                 for (int i = 1; i <= id_initial; i++) {
-                    n_levels = floor(log(block_size[i - 1]) / log(2)) + 1; // Number of levels in the tree minus one
+                    n_levels = ceil(log(block_size[i - 1]) / log(2)); // Number of levels in the tree minus one
+                    sum += 2 * block_size[i - 1] - pow(2, n_levels);
                     id_last += 2 * block_size[i - 1] - pow(2, n_levels);
                 }
-                n_levels = floor(log(block_size[id_initial]) / log(2)) + 1; // Number of levels in the tree minus one
+
+                sum += 2 * block_size[p_initial - 1] - pow(2, n_levels);
+                // printf("id: %d, sum: %d, exp: %d\n", id_initial, sum, (int)(2*np-pow(2, ceil(log(np)/log(2)))));
+                // fflush(stdout);
 
                 if (!id) {
+                    // tree_idx = left;
+                    // printf("id: %d, id_last: %ld\n", id_initial, id_last);
                     ballAlg_omp(0, block_size[id_initial], left, 0, threads);
                     /* ... AND THE OTHER THE RIGHT BRANCH */
                 } else {
+                    // tree_idx = right;
+                    // printf("id: %d, id_last: %ld\n", id_initial, id_last);
                     ballAlg_omp(0, block_size[id_initial], right, 0, threads);
                 }
                 /* NOT YET IN THE LAST MPI-PARALLEL LEVEL */
@@ -1376,6 +1484,7 @@ void print_tree(node *tree) {
 
     for (long i = 0; i < tree_counter; ++i) {
         fprintf(stdout, "%ld %ld %ld %f ", tree[i].node_id, tree[i].left, tree[i].right, tree[i].radius);
+        // fprintf(stdout, "%f ", tree[i].radius);
         fflush(stdout);
         if (tree[i].left == -1) {
             print_point(pts[tree[i].center_idx].pt, n_dims);
@@ -1419,12 +1528,12 @@ int main(int argc, char **argv) {
     p_initial = p;
     id_initial = id;
 
-    if (!id_initial) {
-        fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
-        fflush(stdout);
-    }
+    // if (!id_initial) {
+    //     fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
+    //     fflush(stdout);
+    // }
 
-    if (np < 5*p*p) {
+    if (np < p*p) {
         p_initial = 1;
     }
 
@@ -1447,6 +1556,10 @@ int main(int argc, char **argv) {
         #pragma omp single
         {
             n_threads = omp_get_num_threads();
+            // if (!id_initial) {
+            //     fprintf(stderr, "threads: %d\n", n_threads);
+            //     fflush(stderr);
+            // }
         }
         #pragma omp for
             for (int i = 0; i < block_size[id]; i++)
@@ -1457,8 +1570,10 @@ int main(int argc, char **argv) {
                 centers[i] = &center_aux[i * n_dims];
     }
 
-    int BL = (np < 5*p*p) ? 0 : BLOCK_LOW(id, p, np);
-    int BH = (np < 5*p*p) ? np-1 : BLOCK_HIGH(id, p, np);
+    // int BL = BLOCK_LOW(id, p, np);
+    // int BH = BLOCK_HIGH(id, p, np);
+    int BL = (np < p*p) ? 0 : BLOCK_LOW(id, p, np);
+    int BH = (np < p*p) ? np-1 : BLOCK_HIGH(id, p, np);
     for (int i = 0; i < np; i++)
         for (int j = 0; j < n_dims; j++) {
             if ((i >= BL) && (i <= BH)) {
@@ -1472,7 +1587,7 @@ int main(int argc, char **argv) {
     else
         max_parallel_level = ceil(log(n_threads) / log(2)) - 1;
 
-    if (p == 1 || np < 5*p*p) {
+    if (p == 1 || np < p*p) {
 
         block_size[id_initial] = np;
 
@@ -1484,6 +1599,8 @@ int main(int argc, char **argv) {
 
         n_levels = ceil(log(np) / log(2));
         id_last = pow(2, n_levels) - 1;
+        // MPI_Barrier(MPI_COMM_WORLD);
+        // exit(0);
         if (!id_initial)
             ballAlg_omp(0, np, 0, 0, n_threads);
 
@@ -1516,7 +1633,7 @@ int main(int argc, char **argv) {
         fflush(stdout);
     }
 
-    print_tree(tree);
+    // print_tree(tree);
 
     free(p_aux);
     free(block_size);
