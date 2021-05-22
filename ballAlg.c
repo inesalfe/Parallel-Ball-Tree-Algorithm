@@ -1190,10 +1190,10 @@ int main(int argc, char **argv) {
     p_initial = p;
     id_initial = id;
 
-    if (!id_initial) {
-        fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
-        fflush(stdout);
-    }
+    // if (!id_initial) {
+    //     fprintf(stdout, "%d %ld\n", n_dims, 2 * np - 1);
+    //     fflush(stdout);
+    // }
 
     if (np < p*p) {
         p_initial = 1;
@@ -1270,7 +1270,7 @@ int main(int argc, char **argv) {
         fflush(stdout);
     }
 
-    print_tree(tree);
+    // print_tree(tree);
 
     if (p_initial == 1) {
 
