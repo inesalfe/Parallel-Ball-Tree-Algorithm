@@ -308,7 +308,6 @@ long tree_idx;
 
 long ballAlg_seq(long l, long r) {
 
-    // fflush(stdout);
     long id_temp = tree_idx++;
 
     if (r - l == 1) {
