@@ -6,8 +6,6 @@
 #include <string.h>
 #include <unistd.h>
 
-int print_info = 0;
-
 struct reduce_d_i {
     double max_d;
     int p_id;
@@ -941,11 +939,6 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
                 sum2 += send_counts[i]; // total sending size
             }
 
-            if (print_info == 1) {
-                printf("id: %d, sum1: %d\n", id, sum1);
-                fflush(stdout);
-            }
-
             /* ALL PROCESSES EXCHANGE CHUNKS SO THAT ALL THE DATA IN PROCESS i IS GREATER THAN THAT OF i-1 AND SMALLER THAN THE DATA IN i+1 */
             /* PROJECTIONS EXCHANGE */
             MPI_Alltoallv(proj, send_counts, send_displs, MPI_DOUBLE, recv_buffer, recv_counts, recv_displs, MPI_DOUBLE, comm);
@@ -1355,10 +1348,6 @@ void ballAlg_mpi(long n_points, long n_id, int lvl, MPI_Comm comm, int threads) 
 
                 MPI_Comm_rank(new_comm, &new_id);
                 MPI_Comm_size(new_comm, &p);
-
-                if (print_info == 1) {
-                    printf("id: %d, new_id: %d, n_id: %ld, proc: %d\n", id, new_id, n_id, p);
-                }
 
                 if (id < p) {
                     id = new_id;
